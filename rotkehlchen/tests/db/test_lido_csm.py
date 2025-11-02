@@ -1,5 +1,5 @@
-from eth_utils import to_checksum_address
 import pytest
+from eth_utils import to_checksum_address
 
 from rotkehlchen.db.lido_csm import DBLidoCsm, LidoCsmNodeOperator
 from rotkehlchen.errors.misc import InputError

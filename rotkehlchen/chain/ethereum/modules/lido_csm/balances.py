@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from rotkehlchen.accounting.structures.balance import Balance, BalanceSheet
 from rotkehlchen.chain.ethereum.interfaces.balances import BalancesSheetType, ProtocolWithBalance
@@ -15,9 +15,8 @@ from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.fval import FVal
 from rotkehlchen.inquirer import Inquirer
 from rotkehlchen.logging import RotkehlchenLogsAdapter
-from rotkehlchen.types import ChecksumEvmAddress
 
-from .constants import ACCOUNTING_ABI, LIDO_CSM_ACCOUNTING_CONTRACT, STETH_ABI, CPT_LIDO_CSM
+from .constants import ACCOUNTING_ABI, CPT_LIDO_CSM, LIDO_CSM_ACCOUNTING_CONTRACT, STETH_ABI
 from .metrics import LidoCsmMetricsFetcher
 
 if TYPE_CHECKING:
@@ -33,8 +32,8 @@ class LidoCsmBalances(ProtocolWithBalance):
 
     def __init__(
             self,
-            evm_inquirer: 'EthereumInquirer',
-            tx_decoder: 'EthereumTransactionDecoder',
+            evm_inquirer: EthereumInquirer,
+            tx_decoder: EthereumTransactionDecoder,
             node_operator_db: DBLidoCsm | None = None,
             accounting_contract: EvmContract | None = None,
             steth_contract: EvmContract | None = None,

@@ -115,10 +115,10 @@ from rotkehlchen.api.v1.schemas import (
     IgnoredActionsModifySchema,
     IgnoredAssetsSchema,
     IntegerIdentifierSchema,
+    LidoCsmNodeOperatorSchema,
     LocationAssetMappingsDeleteSchema,
     LocationAssetMappingsPostSchema,
     LocationAssetMappingsUpdateSchema,
-    LidoCsmNodeOperatorSchema,
     ManualBalanceQuerySchema,
     ManuallyTrackedBalancesAddSchema,
     ManuallyTrackedBalancesDeleteSchema,
@@ -1963,6 +1963,19 @@ class LidoCsmNodeOperatorResource(BaseMethodView):
             address=address,
             node_operator_id=node_operator_id,
         )
+
+
+class LidoCsmMetricsResource(BaseMethodView):
+
+    @require_loggedin_user()
+    def post(self) -> Response:
+        """Refresh metrics for all tracked node operators.
+
+        This endpoint ignores the request body and triggers a refresh for all
+        node operators. Returns the refreshed operator objects.
+        """
+        # Call the rest API method without a node_operator_id to refresh all
+        return self.rest_api.refresh_lido_csm_metrics(node_operator_id=None)
 
 
 class InfoResource(BaseMethodView):

@@ -25,6 +25,21 @@ export const useLidoCsmStore = defineStore('staking/lido-csm', () => {
     }
   }
 
+  async function refreshAllNodeOperators(): Promise<void> {
+    set(loading, true);
+    try {
+      set(nodeOperators, await api.refreshMetrics());
+    }
+    catch (error: any) {
+      setMessage({
+        description: t('staking_page.lido_csm.messages.refresh_failed', { message: error.message }),
+      });
+    }
+    finally {
+      set(loading, false);
+    }
+  }
+
   async function addNodeOperator(payload: LidoCsmNodeOperatorPayload): Promise<void> {
     try {
       set(nodeOperators, await api.addNodeOperator(payload));
@@ -53,6 +68,7 @@ export const useLidoCsmStore = defineStore('staking/lido-csm', () => {
     addNodeOperator,
     deleteNodeOperator,
     fetchNodeOperators,
+    refreshAllNodeOperators,
     loading,
     nodeOperators,
   };

@@ -18,7 +18,7 @@ const dialogOpen = ref<boolean>(false);
 
 const lidoCsmStore = useLidoCsmStore();
 const { nodeOperators, loading } = storeToRefs(lidoCsmStore);
-const { addNodeOperator, deleteNodeOperator, fetchNodeOperators } = lidoCsmStore;
+const { addNodeOperator, deleteNodeOperator, fetchNodeOperators, refreshAllNodeOperators } = lidoCsmStore;
 
 const { t } = useI18n({ useScope: 'global' });
 
@@ -176,7 +176,7 @@ async function handleRefresh(): Promise<void> {
   if (get(loading))
     return;
 
-  await fetchNodeOperators();
+  await refreshAllNodeOperators();
 }
 
 // Expose refresh to parent (staking menu page)

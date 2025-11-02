@@ -28,7 +28,7 @@ const props = defineProps<{
 
 const imageSize = '64px';
 
-const pages: Record<NavType, ReturnType<typeof defineAsyncComponent>> = {
+const pages = {
   eth2: defineAsyncComponent(() => import('@/modules/staking/eth/EthStakingPage.vue')),
   kraken: defineAsyncComponent(() => import('@/components/staking/kraken/KrakenPage.vue')),
   liquity: defineAsyncComponent(() => import('@/components/staking/liquity/LiquityPage.vue')),
@@ -94,9 +94,6 @@ const page = computed(() => {
   return selectedLocation ? pages[selectedLocation] : null;
 });
 
-// Allow parent to control child page refresh when applicable (currently not used)
-const stakingPage = ref<any>();
-
 onMounted(async () => {
   if (props.location) {
     set(location, props.location);
@@ -147,7 +144,7 @@ onMounted(async () => {
       v-if="page"
       class="pt-8"
     >
-      <Component :is="page" ref="stakingPage" />
+      <Component :is="page" />
     </div>
     <div v-else>
       <div class="flex items-center justify-center md:justify-end mt-2 md:mr-6 text-rui-text-secondary gap-2">

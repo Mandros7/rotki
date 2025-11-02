@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 from rotkehlchen.chain.ethereum.modules.lido_csm.metrics import (
     LidoCsmMetricsFetcher,
@@ -44,7 +43,7 @@ def test_lido_csm_metrics_fetcher_converts_values() -> None:
     )
 
     # Monkeypatch IPFS fetch to return a doc with values [[id, cumulativeShares]]
-    def fake_fetch_ipfs_json(_cid: str) -> dict:  # noqa: ANN201
+    def fake_fetch_ipfs_json(_cid: str) -> dict:
         return {
             'values': [
                 {'value': [7, 5 * 10**17]},  # for node operator id 7

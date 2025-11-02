@@ -4,14 +4,14 @@ from unittest.mock import MagicMock
 from eth_utils import to_checksum_address
 
 from rotkehlchen.accounting.structures.balance import Balance
-from rotkehlchen.chain.ethereum.modules.lido_csm.constants import CPT_LIDO_CSM
 from rotkehlchen.chain.ethereum.modules.lido_csm.balances import LidoCsmBalances
+from rotkehlchen.chain.ethereum.modules.lido_csm.constants import CPT_LIDO_CSM
+from rotkehlchen.constants.assets import A_STETH
 from rotkehlchen.db.lido_csm import LidoCsmNodeOperator
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.fval import FVal
 from rotkehlchen.inquirer import Inquirer
 from rotkehlchen.types import ChainID
-from rotkehlchen.constants.assets import A_STETH
 
 
 def _make_evm_inquirer():

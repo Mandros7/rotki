@@ -7,14 +7,15 @@ interface UseLidoCsmApiReturn {
   listNodeOperators: () => Promise<LidoCsmNodeOperator[]>;
   addNodeOperator: (payload: LidoCsmNodeOperatorPayload) => Promise<LidoCsmNodeOperator[]>;
   deleteNodeOperator: (payload: LidoCsmNodeOperatorPayload) => Promise<LidoCsmNodeOperator[]>;
+  refreshMetrics: () => Promise<LidoCsmNodeOperator[]>;
 }
 
 const BASE_PATH = '/lido-csm/node-operators';
+const METRICS_PATH = '/lido-csm/metrics';
 
 interface ApiNodeOperatorResponse {
   address: string;
   nodeOperatorId?: number;
-  node_operator_id?: number;
   metrics?: LidoCsmNodeOperatorMetrics | null;
 }
 
@@ -33,7 +34,7 @@ function toApiPayload(payload: LidoCsmNodeOperatorPayload): ApiNodeOperatorPaylo
 function fromApiResponse(entries: ApiNodeOperatorResponse[]): LidoCsmNodeOperator[] {
   const result: LidoCsmNodeOperator[] = [];
   for (const entry of entries) {
-    const nodeOperatorId = entry.nodeOperatorId ?? entry.node_operator_id;
+    const nodeOperatorId = entry.nodeOperatorId ?? (entry as any).node_operator_id;
     if (nodeOperatorId === undefined)
       continue;
 
@@ -77,9 +78,18 @@ export function useLidoCsmApi(): UseLidoCsmApiReturn {
     return fromApiResponse(handleResponse(response));
   };
 
+  const refreshMetrics = async (): Promise<LidoCsmNodeOperator[]> => {
+    const response = await api.instance.post<ActionResult<ApiNodeOperatorResponse[]>>(METRICS_PATH, {}, {
+      validateStatus: validWithSessionStatus,
+    });
+
+    return fromApiResponse(handleResponse(response));
+  };
+
   return {
     addNodeOperator,
     deleteNodeOperator,
     listNodeOperators,
+    refreshMetrics,
   };
 }

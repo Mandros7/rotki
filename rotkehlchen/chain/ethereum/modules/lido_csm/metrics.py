@@ -17,10 +17,10 @@ from .constants import (
     BOND_CURVE_TYPE_LABELS,
     CSM_MODULE_ABI,
     FEE_DISTRIBUTOR_ABI,
-    LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT,
     LIDO_CSM_ACCOUNTING_CONTRACT,
-    LIDO_CSM_MODULE_CONTRACT,
+    LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT,
     LIDO_CSM_IPFS_GATEWAY,
+    LIDO_CSM_MODULE_CONTRACT,
     STETH_ABI,
 )
 
@@ -64,7 +64,7 @@ class LidoCsmNodeOperatorStats:
 class LidoCsmMetricsFetcher:
     def __init__(
             self,
-            evm_inquirer: 'EthereumInquirer',
+            evm_inquirer: EthereumInquirer,
             accounting_contract: EvmContract | None = None,
             module_contract: EvmContract | None = None,
             steth_contract: EvmContract | None = None,
@@ -102,7 +102,7 @@ class LidoCsmMetricsFetcher:
         return asset_normalized_value(pooled_eth, A_STETH)
 
     def _fetch_ipfs_json(self, cid: str) -> dict[str, Any]:
-        url = f"{LIDO_CSM_IPFS_GATEWAY}{cid}"
+        url = f'{LIDO_CSM_IPFS_GATEWAY}{cid}'
         data = query_file(url, is_json=True)
         assert isinstance(data, dict)
         return data

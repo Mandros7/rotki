@@ -1,7 +1,8 @@
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, Sequence
+from typing import TYPE_CHECKING, Final
 
 from eth_utils import to_checksum_address
 
@@ -25,6 +26,7 @@ class LidoCsmNodeOperator:
 
     address: ChecksumEvmAddress
     node_operator_id: int
+    metrics: dict | None = None
 
 
 class DBLidoCsm:
@@ -39,6 +41,7 @@ class DBLidoCsm:
             {
                 'address': entry.address,
                 'node_operator_id': entry.node_operator_id,
+                **({'metrics': entry.metrics} if entry.metrics is not None else {}),
             },
             separators=(',', ':'),
             sort_keys=True,
@@ -50,13 +53,14 @@ class DBLidoCsm:
             raw = json.loads(value)
             address = to_checksum_address(raw['address'])
             node_operator_id = int(raw['node_operator_id'])
+            metrics = raw.get('metrics')
             if node_operator_id < 0:
                 raise ValueError('Invalid node operator id')
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             log.error('Failed to deserialize Lido CSM node-operator entry %s due to %s', value, exc)
             return None
 
-        return LidoCsmNodeOperator(address=address, node_operator_id=node_operator_id)
+        return LidoCsmNodeOperator(address=address, node_operator_id=node_operator_id, metrics=metrics)
 
     def _fetch_entries(self, cursor: 'DBCursor') -> tuple[LidoCsmNodeOperator, ...]:
         result = cursor.execute(
@@ -80,10 +84,10 @@ class DBLidoCsm:
             node_operator_id: int,
     ) -> None:
         existing = cursor.execute(
-            '''
+            """
             SELECT 1 FROM multisettings
             WHERE name=? AND json_extract(value, '$.node_operator_id')=?
-            ''',
+            """,
             (NODE_OPERATOR_KEY, node_operator_id),
         ).fetchone()
         if existing is not None:
@@ -106,17 +110,48 @@ class DBLidoCsm:
                 (NODE_OPERATOR_KEY, serialized),
             )
 
+    def set_metrics(self, node_operator_id: int, metrics: dict) -> None:
+        """Set or update the metrics field for the given tracked node operator.
+
+        This updates the multisettings row that matches the node_operator_id.
+        """
+        with self.db.user_write() as cursor:
+            # fetch the current value
+            row = cursor.execute(
+                'SELECT value FROM multisettings WHERE name=? AND json_extract(value, "$.node_operator_id")=?;',
+                (NODE_OPERATOR_KEY, node_operator_id),
+            ).fetchone()
+            if row is None:
+                raise InputError(f'Node operator id {node_operator_id} is not tracked')
+            current = row[0]
+            entry = self._deserialize(current)
+            if entry is None:
+                raise InputError(f'Failed to deserialize stored node operator {node_operator_id}')
+            # create a new serialized value including metrics
+            new_entry = LidoCsmNodeOperator(address=entry.address, node_operator_id=entry.node_operator_id, metrics=metrics)
+            serialized = self._serialize(new_entry)
+            cursor.execute(
+                'UPDATE multisettings SET value=? WHERE name=? AND json_extract(value, "$.node_operator_id")=?;',
+                (serialized, NODE_OPERATOR_KEY, node_operator_id),
+            )
+
+    def delete_metrics(self, node_operator_id: int) -> None:
+        """Remove the metrics key from the stored entry for the given node operator id."""
+        with self.db.user_write() as cursor:
+            cursor.execute(
+                "UPDATE multisettings SET value=json_remove(value, '$.metrics') WHERE name=? AND json_extract(value, '$.node_operator_id')=?;",
+                (NODE_OPERATOR_KEY, node_operator_id),
+            )
+
     def remove_node_operator(
             self,
             address: ChecksumEvmAddress,
             node_operator_id: int,
     ) -> None:
-        entry = LidoCsmNodeOperator(address=address, node_operator_id=node_operator_id)
-        serialized = self._serialize(entry)
         with self.db.user_write() as cursor:
             cursor.execute(
-                'DELETE FROM multisettings WHERE name=? AND value=?',
-                (NODE_OPERATOR_KEY, serialized),
+                'DELETE FROM multisettings WHERE name=? AND json_extract(value, "$.node_operator_id")=?',
+                (NODE_OPERATOR_KEY, node_operator_id),
             )
             if cursor.rowcount != 1:
                 raise InputError(
