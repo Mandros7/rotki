@@ -5,6 +5,10 @@ from eth_utils import to_checksum_address
 
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.chain.ethereum.modules.lido_csm.balances import LidoCsmBalances
+from rotkehlchen.chain.ethereum.modules.lido_csm.metrics import (
+    LidoCsmNodeOperatorStats,
+    LidoCsmMetricsFetcher,
+)
 from rotkehlchen.chain.ethereum.modules.lido_csm.constants import CPT_LIDO_CSM
 from rotkehlchen.constants.assets import A_STETH
 from rotkehlchen.db.lido_csm import LidoCsmNodeOperator
@@ -49,6 +53,21 @@ def test_lido_csm_balances_accumulates(monkeypatch):
         staticmethod(lambda asset: FVal('2000')),
     )
 
+    # Tests should control external contract calls: mock metrics fetcher to return no rewards
+    monkeypatch.setattr(
+        LidoCsmMetricsFetcher,
+        'get_operator_stats',
+        lambda self, node_operator_id: LidoCsmNodeOperatorStats(
+            operator_type_id=0,
+            operator_type_label='Unknown',
+            current_bond=FVal(0),
+            required_bond=FVal(0),
+            claimable_bond=FVal(0),
+            total_deposited_keys=0,
+            rewards_steth=FVal(0),
+        ),
+    )
+
     result = balances.query_balances()
     steth_token = A_STETH.resolve_to_evm_token()
     assert result[entry.address].assets[steth_token][CPT_LIDO_CSM] == Balance(
@@ -77,6 +96,21 @@ def test_lido_csm_balances_skips_on_error(monkeypatch):
         Inquirer,
         'find_usd_price',
         staticmethod(lambda asset: FVal('2000')),
+    )
+
+    # Avoid external contract calls in metrics fetcher for this test
+    monkeypatch.setattr(
+        LidoCsmMetricsFetcher,
+        'get_operator_stats',
+        lambda self, node_operator_id: LidoCsmNodeOperatorStats(
+            operator_type_id=0,
+            operator_type_label='Unknown',
+            current_bond=FVal(0),
+            required_bond=FVal(0),
+            claimable_bond=FVal(0),
+            total_deposited_keys=0,
+            rewards_steth=FVal(0),
+        ),
     )
 
     result = balances.query_balances()
