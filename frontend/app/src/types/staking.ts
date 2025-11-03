@@ -52,29 +52,45 @@ export function emptyPagination(): KrakenStakingPagination {
   };
 }
 
-export interface LidoCsmNodeOperatorPayload {
-  address: string;
-  nodeOperatorId: number;
-}
+export const LidoCsmNodeOperatorPayloadSchema = z.object({
+  address: z.string(),
+  nodeOperatorId: z.number().int().nonnegative(),
+});
 
-export interface LidoCsmNodeOperatorMetrics {
-  operatorType: {
-    id: number;
-    label: string;
-  } | null;
-  bond: {
-    current: string;
-    required: string;
-    claimable: string;
-  } | null;
-  keys: {
-    totalDeposited: number;
-  } | null;
-  rewards?: {
-    pending: string;
-  } | null;
-}
+export type LidoCsmNodeOperatorPayload = z.infer<typeof LidoCsmNodeOperatorPayloadSchema>;
 
-export interface LidoCsmNodeOperator extends LidoCsmNodeOperatorPayload {
-  metrics?: LidoCsmNodeOperatorMetrics | null;
-}
+const LidoCsmOperatorTypeSchema = z.object({
+  id: z.number().int().nonnegative().optional(),
+  label: z.string().optional(),
+}).strict().partial();
+
+const LidoCsmBondSchema = z.object({
+  current: NumericString.optional(),
+  required: NumericString.optional(),
+  claimable: NumericString.optional(),
+}).strict().partial();
+
+const LidoCsmKeysSchema = z.object({
+  totalDeposited: z.number().int().nonnegative().optional(),
+}).strict().partial();
+
+const LidoCsmRewardsSchema = z.object({
+  pending: NumericString.optional(),
+}).strict().partial();
+
+export const LidoCsmNodeOperatorMetricsSchema = z.object({
+  operatorType: LidoCsmOperatorTypeSchema.nullish(),
+  bond: LidoCsmBondSchema.nullish(),
+  keys: LidoCsmKeysSchema.nullish(),
+  rewards: LidoCsmRewardsSchema.nullish().optional(),
+});
+
+export type LidoCsmNodeOperatorMetrics = z.infer<typeof LidoCsmNodeOperatorMetricsSchema>;
+
+export const LidoCsmNodeOperatorSchema = LidoCsmNodeOperatorPayloadSchema.extend({
+  metrics: LidoCsmNodeOperatorMetricsSchema.nullish(),
+});
+
+export type LidoCsmNodeOperator = z.infer<typeof LidoCsmNodeOperatorSchema>;
+
+export const LidoCsmNodeOperatorListSchema = z.array(LidoCsmNodeOperatorSchema);

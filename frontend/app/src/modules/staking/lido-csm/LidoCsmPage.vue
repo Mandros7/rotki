@@ -1,27 +1,30 @@
 <script setup lang="ts">
-import type { AddressData, BlockchainAccount } from '@/types/blockchain/accounts';
 import { Blockchain } from '@rotki/common';
 import BlockchainAccountSelector from '@/components/helper/BlockchainAccountSelector.vue';
 import TablePageLayout from '@/components/layout/TablePageLayout.vue';
-import { useLidoCsmStore } from '@/store/staking/lido-csm';
+import { useLidoCsmApi } from '@/composables/api/staking/lido-csm';
+import type { AddressData, BlockchainAccount } from '@/types/blockchain/accounts';
+import type { LidoCsmNodeOperator, LidoCsmNodeOperatorPayload } from '@/types/staking';
+import { useMessageStore } from '@/store/message';
 import { getAccountAddress } from '@/utils/blockchain/accounts/utils';
 
 defineOptions({
   name: 'LidoCsmPage',
 });
 
+const { t } = useI18n({ useScope: 'global' });
+const { isDark } = useRotkiTheme();
+
+const nodeOperators = ref<LidoCsmNodeOperator[]>([]);
+const loading = ref<boolean>(false);
 const selectedAccount = ref<BlockchainAccount<AddressData>[]>([]);
 const nodeOperatorId = ref<string>('');
 const submitting = ref<boolean>(false);
 const removingEntryKey = ref<string>('');
 const dialogOpen = ref<boolean>(false);
 
-const lidoCsmStore = useLidoCsmStore();
-const { loading, nodeOperators } = storeToRefs(lidoCsmStore);
-const { addNodeOperator, deleteNodeOperator, fetchNodeOperators, refreshAllNodeOperators } = lidoCsmStore;
-
-const { t } = useI18n({ useScope: 'global' });
-const { isDark } = useRotkiTheme();
+const api = useLidoCsmApi();
+const { setMessage } = useMessageStore();
 
 const selectedAddress = computed<string>(() => {
   const account = get(selectedAccount)[0];
@@ -57,6 +60,67 @@ const dialogDescription = computed<string>(() => t('staking_page.lido_csm.form.d
 const stEthFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 6,
 });
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error)
+    return error.message;
+
+  return String(error);
+}
+
+async function fetchNodeOperators(): Promise<void> {
+  set(loading, true);
+  try {
+    set(nodeOperators, await api.listNodeOperators());
+  }
+  catch (error: unknown) {
+    setMessage({
+      description: t('staking_page.lido_csm.messages.fetch_failed', { message: toErrorMessage(error) }),
+    });
+  }
+  finally {
+    set(loading, false);
+  }
+}
+
+async function refreshAllNodeOperators(): Promise<void> {
+  set(loading, true);
+  try {
+    set(nodeOperators, await api.refreshMetrics());
+  }
+  catch (error: unknown) {
+    setMessage({
+      description: t('staking_page.lido_csm.messages.refresh_failed', { message: toErrorMessage(error) }),
+    });
+  }
+  finally {
+    set(loading, false);
+  }
+}
+
+async function addNodeOperator(payload: LidoCsmNodeOperatorPayload): Promise<void> {
+  try {
+    set(nodeOperators, await api.addNodeOperator(payload));
+  }
+  catch (error: unknown) {
+    setMessage({
+      description: t('staking_page.lido_csm.messages.add_failed', { message: toErrorMessage(error) }),
+    });
+    throw error;
+  }
+}
+
+async function deleteNodeOperator(payload: LidoCsmNodeOperatorPayload): Promise<void> {
+  try {
+    set(nodeOperators, await api.deleteNodeOperator(payload));
+  }
+  catch (error: unknown) {
+    setMessage({
+      description: t('staking_page.lido_csm.messages.delete_failed', { message: toErrorMessage(error) }),
+    });
+    throw error;
+  }
+}
 
 function formatStEth(value?: string | null): string {
   if (!value)
@@ -163,16 +227,6 @@ async function handleRemove(address: string, nodeOperatorIdValue: number): Promi
   }
 }
 
-onMounted(async () => {
-  if (get(nodeOperators).length === 0)
-    await fetchNodeOperators();
-});
-
-watch(dialogOpen, (isOpen) => {
-  if (!isOpen)
-    resetDialogState();
-});
-
 async function handleRefresh(): Promise<void> {
   if (get(loading))
     return;
@@ -180,7 +234,16 @@ async function handleRefresh(): Promise<void> {
   await refreshAllNodeOperators();
 }
 
-// Expose refresh to parent (staking menu page)
+watch(dialogOpen, (isOpen) => {
+  if (!isOpen)
+    resetDialogState();
+});
+
+onMounted(async () => {
+  if (get(nodeOperators).length === 0)
+    await fetchNodeOperators();
+});
+
 defineExpose({
   refresh: handleRefresh,
 });
