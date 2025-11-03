@@ -16,7 +16,7 @@ from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.types import ChecksumEvmAddress
 from rotkehlchen.utils.misc import bytes_to_address, from_wei
 
-from ..lido_csm.constants import CPT_LIDO_CSM
+from rotkehlchen.chain.ethereum.modules.lido_csm.constants import CPT_LIDO_CSM
 from .constants import CPT_LIDO, LIDO_STETH_SUBMITTED, STETH_MAX_ROUND_ERROR_WEI
 
 if TYPE_CHECKING:

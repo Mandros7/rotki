@@ -1,14 +1,13 @@
-import json
 import logging
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any
 
-from eth_utils import to_checksum_address
+from pysqlcipher3 import dbapi2 as sqlcipher
 
 from rotkehlchen.errors.misc import InputError
 from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.types import ChecksumEvmAddress
+from rotkehlchen.utils.misc import ts_now
 
 if TYPE_CHECKING:
     from rotkehlchen.db.dbhandler import DBHandler
@@ -17,8 +16,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 log = RotkehlchenLogsAdapter(logger)
 
-NODE_OPERATOR_KEY: Final = 'lido_csm_node_operator'
-
 
 @dataclass(frozen=True, slots=True)
 class LidoCsmNodeOperator:
@@ -26,7 +23,74 @@ class LidoCsmNodeOperator:
 
     address: ChecksumEvmAddress
     node_operator_id: int
-    metrics: dict | None = None
+    metrics: dict[str, Any] | None = None
+
+
+def _serialize_metrics_row(row: tuple[Any, ...]) -> dict[str, Any] | None:
+    (
+        operator_type_id,
+        operator_type_label,
+        bond_current,
+        bond_required,
+        bond_claimable,
+        total_deposited_keys,
+        rewards_pending,
+    ) = row
+
+    if all(value is None for value in row):
+        return None
+
+    metrics: dict[str, Any] = {}
+    metrics['operator_type'] = (
+        None if operator_type_id is None and operator_type_label is None else {
+            'id': operator_type_id,
+            'label': operator_type_label,
+        }
+    )
+    metrics['bond'] = (
+        None if bond_current is None and bond_required is None and bond_claimable is None else {
+            'current': bond_current,
+            'required': bond_required,
+            'claimable': bond_claimable,
+        }
+    )
+    metrics['keys'] = (
+        None if total_deposited_keys is None else {
+            'total_deposited': total_deposited_keys,
+        }
+    )
+    metrics['rewards'] = (
+        None if rewards_pending is None else {
+            'pending': rewards_pending,
+        }
+    )
+
+    return metrics
+
+
+def _parse_metrics_payload(metrics: dict[str, Any]) -> tuple[Any, ...]:
+    operator_type = metrics.get('operator_type') if isinstance(metrics, dict) else None
+    bond = metrics.get('bond') if isinstance(metrics, dict) else None
+    keys = metrics.get('keys') if isinstance(metrics, dict) else None
+    rewards = metrics.get('rewards') if isinstance(metrics, dict) else None
+
+    operator_type_id = operator_type.get('id') if isinstance(operator_type, dict) else None
+    operator_type_label = operator_type.get('label') if isinstance(operator_type, dict) else None
+    bond_current = bond.get('current') if isinstance(bond, dict) else None
+    bond_required = bond.get('required') if isinstance(bond, dict) else None
+    bond_claimable = bond.get('claimable') if isinstance(bond, dict) else None
+    total_deposited_keys = keys.get('total_deposited') if isinstance(keys, dict) else None
+    rewards_pending = rewards.get('pending') if isinstance(rewards, dict) else None
+
+    return (
+        operator_type_id,
+        operator_type_label,
+        bond_current,
+        bond_required,
+        bond_claimable,
+        total_deposited_keys,
+        rewards_pending,
+    )
 
 
 class DBLidoCsm:
@@ -36,62 +100,39 @@ class DBLidoCsm:
         self.db = database
 
     @staticmethod
-    def _serialize(entry: LidoCsmNodeOperator) -> str:
-        return json.dumps(
-            {
-                'address': entry.address,
-                'node_operator_id': entry.node_operator_id,
-                **({'metrics': entry.metrics} if entry.metrics is not None else {}),
-            },
-            separators=(',', ':'),
-            sort_keys=True,
+    def _serialize_entry(row: tuple[Any, ...]) -> LidoCsmNodeOperator:
+        address, node_operator_id, *metrics_parts = row
+        metrics = _serialize_metrics_row(tuple(metrics_parts))
+        return LidoCsmNodeOperator(
+            address=ChecksumEvmAddress(address),
+            node_operator_id=int(node_operator_id),
+            metrics=metrics,
         )
-
-    @staticmethod
-    def _deserialize(value: str) -> LidoCsmNodeOperator | None:
-        try:
-            raw = json.loads(value)
-            address = to_checksum_address(raw['address'])
-            node_operator_id = int(raw['node_operator_id'])
-            metrics = raw.get('metrics')
-            if node_operator_id < 0:
-                raise ValueError('Invalid node operator id')
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-            log.error('Failed to deserialize Lido CSM node-operator entry %s due to %s', value, exc)
-            return None
-
-        return LidoCsmNodeOperator(address=address, node_operator_id=node_operator_id, metrics=metrics)
 
     def _fetch_entries(self, cursor: 'DBCursor') -> tuple[LidoCsmNodeOperator, ...]:
         result = cursor.execute(
-            'SELECT value FROM multisettings WHERE name=?',
-            (NODE_OPERATOR_KEY,),
+            """
+            SELECT
+                o.address,
+                o.node_operator_id,
+                m.operator_type_id,
+                m.operator_type_label,
+                m.bond_current,
+                m.bond_required,
+                m.bond_claimable,
+                m.total_deposited_keys,
+                m.rewards_pending
+            FROM lido_csm_node_operators AS o
+            LEFT JOIN lido_csm_node_operator_metrics AS m
+                ON o.node_operator_id = m.node_operator_id
+            ORDER BY o.node_operator_id
+            """,
         )
-        entries: list[LidoCsmNodeOperator] = []
-        for (value,) in result.fetchall():
-            if (entry := self._deserialize(value)) is not None:
-                entries.append(entry)
-
-        return tuple(entries)
+        return tuple(self._serialize_entry(row) for row in result.fetchall())
 
     def get_node_operators(self) -> tuple[LidoCsmNodeOperator, ...]:
         with self.db.conn.read_ctx() as cursor:
             return self._fetch_entries(cursor)
-
-    def _ensure_unique_id(
-            self,
-            cursor: 'DBCursor',
-            node_operator_id: int,
-    ) -> None:
-        existing = cursor.execute(
-            """
-            SELECT 1 FROM multisettings
-            WHERE name=? AND json_extract(value, '$.node_operator_id')=?
-            """,
-            (NODE_OPERATOR_KEY, node_operator_id),
-        ).fetchone()
-        if existing is not None:
-            raise InputError(f'Node operator id {node_operator_id} is already tracked')
 
     def add_node_operator(
             self,
@@ -101,46 +142,59 @@ class DBLidoCsm:
         if node_operator_id < 0:
             raise InputError('Node operator id must be >= 0')
 
-        entry = LidoCsmNodeOperator(address=address, node_operator_id=node_operator_id)
-        serialized = self._serialize(entry)
         with self.db.user_write() as cursor:
-            self._ensure_unique_id(cursor, node_operator_id)
-            cursor.execute(
-                'INSERT INTO multisettings(name, value) VALUES(?, ?)',
-                (NODE_OPERATOR_KEY, serialized),
-            )
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO lido_csm_node_operators(node_operator_id, address)
+                    VALUES(?, ?)
+                    """,
+                    (node_operator_id, address),
+                )
+            except sqlcipher.IntegrityError as exc:  # pylint: disable=no-member
+                raise InputError(f'Node operator id {node_operator_id} is already tracked') from exc
 
-    def set_metrics(self, node_operator_id: int, metrics: dict) -> None:
-        """Set or update the metrics field for the given tracked node operator.
-
-        This updates the multisettings row that matches the node_operator_id.
-        """
+    def set_metrics(self, node_operator_id: int, metrics: dict[str, Any]) -> None:
+        columns = _parse_metrics_payload(metrics)
         with self.db.user_write() as cursor:
-            # fetch the current value
-            row = cursor.execute(
-                'SELECT value FROM multisettings WHERE name=? AND json_extract(value, "$.node_operator_id")=?;',
-                (NODE_OPERATOR_KEY, node_operator_id),
+            existing = cursor.execute(
+                'SELECT 1 FROM lido_csm_node_operators WHERE node_operator_id=?',
+                (node_operator_id,),
             ).fetchone()
-            if row is None:
+            if existing is None:
                 raise InputError(f'Node operator id {node_operator_id} is not tracked')
-            current = row[0]
-            entry = self._deserialize(current)
-            if entry is None:
-                raise InputError(f'Failed to deserialize stored node operator {node_operator_id}')
-            # create a new serialized value including metrics
-            new_entry = LidoCsmNodeOperator(address=entry.address, node_operator_id=entry.node_operator_id, metrics=metrics)
-            serialized = self._serialize(new_entry)
+
             cursor.execute(
-                'UPDATE multisettings SET value=? WHERE name=? AND json_extract(value, "$.node_operator_id")=?;',
-                (serialized, NODE_OPERATOR_KEY, node_operator_id),
+                """
+                INSERT INTO lido_csm_node_operator_metrics(
+                    node_operator_id,
+                    operator_type_id,
+                    operator_type_label,
+                    bond_current,
+                    bond_required,
+                    bond_claimable,
+                    total_deposited_keys,
+                    rewards_pending,
+                    updated_ts
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(node_operator_id) DO UPDATE SET
+                    operator_type_id=excluded.operator_type_id,
+                    operator_type_label=excluded.operator_type_label,
+                    bond_current=excluded.bond_current,
+                    bond_required=excluded.bond_required,
+                    bond_claimable=excluded.bond_claimable,
+                    total_deposited_keys=excluded.total_deposited_keys,
+                    rewards_pending=excluded.rewards_pending,
+                    updated_ts=excluded.updated_ts
+                """,
+                (node_operator_id, *columns, ts_now()),
             )
 
     def delete_metrics(self, node_operator_id: int) -> None:
-        """Remove the metrics key from the stored entry for the given node operator id."""
         with self.db.user_write() as cursor:
             cursor.execute(
-                "UPDATE multisettings SET value=json_remove(value, '$.metrics') WHERE name=? AND json_extract(value, '$.node_operator_id')=?;",
-                (NODE_OPERATOR_KEY, node_operator_id),
+                'DELETE FROM lido_csm_node_operator_metrics WHERE node_operator_id=?',
+                (node_operator_id,),
             )
 
     def remove_node_operator(
@@ -149,21 +203,22 @@ class DBLidoCsm:
             node_operator_id: int,
     ) -> None:
         with self.db.user_write() as cursor:
-            cursor.execute(
-                'DELETE FROM multisettings WHERE name=? AND json_extract(value, "$.node_operator_id")=?',
-                (NODE_OPERATOR_KEY, node_operator_id),
-            )
-            if cursor.rowcount != 1:
+            row = cursor.execute(
+                'SELECT address FROM lido_csm_node_operators WHERE node_operator_id=?',
+                (node_operator_id,),
+            ).fetchone()
+            if row is None:
                 raise InputError(
                     f'Node operator with id {node_operator_id} for {address} is not tracked',
                 )
 
-    def upsert_entries(self, entries: Sequence[LidoCsmNodeOperator]) -> None:
-        """Utility for tests to replace all stored entries."""
-        with self.db.user_write() as cursor:
-            cursor.execute('DELETE FROM multisettings WHERE name=?', (NODE_OPERATOR_KEY,))
-            for entry in entries:
-                cursor.execute(
-                    'INSERT INTO multisettings(name, value) VALUES(?, ?)',
-                    (NODE_OPERATOR_KEY, self._serialize(entry)),
+            stored_address = ChecksumEvmAddress(row[0])
+            if stored_address != address:
+                raise InputError(
+                    f'Node operator id {node_operator_id} is tracked for {stored_address}, not {address}',
                 )
+
+            cursor.execute(
+                'DELETE FROM lido_csm_node_operators WHERE node_operator_id=?',
+                (node_operator_id,),
+            )

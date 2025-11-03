@@ -46,4 +46,28 @@ def upgrade_v50_to_v51(db: 'DBHandler', progress_handler: 'DBUpgradeProgressHand
         )
         write_cursor.switch_foreign_keys('ON')
 
+    @progress_step(description='Create Lido CSM support tables.')
+    def _create_lido_csm_tables(write_cursor: 'DBCursor') -> None:
+        """Create Lido CSM specific tables and indexes."""
+        write_cursor.execute("""
+        CREATE TABLE IF NOT EXISTS lido_csm_node_operators (
+            node_operator_id INTEGER NOT NULL PRIMARY KEY,
+            address TEXT NOT NULL
+        );
+        """)
+        write_cursor.execute("""
+        CREATE TABLE IF NOT EXISTS lido_csm_node_operator_metrics (
+            node_operator_id INTEGER NOT NULL PRIMARY KEY,
+            operator_type_id INTEGER,
+            operator_type_label TEXT,
+            bond_current TEXT,
+            bond_required TEXT,
+            bond_claimable TEXT,
+            total_deposited_keys INTEGER,
+            rewards_pending TEXT,
+            updated_ts INTEGER,
+            FOREIGN KEY(node_operator_id) REFERENCES lido_csm_node_operators(node_operator_id) ON UPDATE CASCADE ON DELETE CASCADE
+        );
+        """)
+
     perform_userdb_upgrade_steps(db=db, progress_handler=progress_handler, should_vacuum=True)

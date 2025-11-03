@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -64,29 +62,25 @@ class LidoCsmNodeOperatorStats:
 class LidoCsmMetricsFetcher:
     def __init__(
             self,
-            evm_inquirer: EthereumInquirer,
-            accounting_contract: EvmContract | None = None,
-            module_contract: EvmContract | None = None,
-            steth_contract: EvmContract | None = None,
-            fee_distributor_contract: EvmContract | None = None,
+            evm_inquirer: 'EthereumInquirer',
     ) -> None:
-        self.accounting_contract = accounting_contract or EvmContract(
+        self.accounting_contract = EvmContract(
             address=LIDO_CSM_ACCOUNTING_CONTRACT,
             abi=ACCOUNTING_ABI,
             deployed_block=0,
         )
-        self.module_contract = module_contract or EvmContract(
+        self.module_contract = EvmContract(
             address=LIDO_CSM_MODULE_CONTRACT,
             abi=CSM_MODULE_ABI,
             deployed_block=0,
         )
         steth_token = A_STETH.resolve_to_evm_token()
-        self.steth_contract = steth_contract or EvmContract(
+        self.steth_contract = EvmContract(
             address=steth_token.evm_address,
             abi=STETH_ABI,
             deployed_block=0,
         )
-        self.fee_distributor_contract = fee_distributor_contract or EvmContract(
+        self.fee_distributor_contract = EvmContract(
             address=LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT,
             abi=FEE_DISTRIBUTOR_ABI,
             deployed_block=0,
@@ -102,10 +96,12 @@ class LidoCsmMetricsFetcher:
         return asset_normalized_value(pooled_eth, A_STETH)
 
     def _fetch_ipfs_json(self, cid: str) -> dict[str, Any]:
-        url = f'{LIDO_CSM_IPFS_GATEWAY}{cid}'
-        data = query_file(url, is_json=True)
-        assert isinstance(data, dict)
-        return data
+        """Fetch the fee distributor merkle tree document from IPFS.
+
+        May raise:
+            RemoteError: if the document cannot be retrieved.
+        """
+        return query_file(f'{LIDO_CSM_IPFS_GATEWAY}{cid}', is_json=True)
 
     def get_operator_stats(self, node_operator_id: int) -> LidoCsmNodeOperatorStats:
         curve_id = self.accounting_contract.call(
@@ -145,16 +141,18 @@ class LidoCsmMetricsFetcher:
             values = doc.get('values', []) if isinstance(doc, dict) else []
             cumulative_shares = 0
             for item in values:
-                # Support both {'value': [id, shares]} and just [id, shares]
                 val = item.get('value') if isinstance(item, dict) else item
-                if (
-                    isinstance(val, (list, tuple)) and
-                    len(val) >= 2 and
-                    int(val[0]) == int(node_operator_id)
-                ):
-                    # values may be string or int
-                    cumulative_shares = int(val[1])
+                if not (isinstance(val, (list, tuple)) and len(val) >= 2):
+                    continue
+
+                try:
+                    operator_id_raw, cumulative_raw = val[0], val[1]
+                    if int(operator_id_raw) != int(node_operator_id):
+                        continue
+                    cumulative_shares = int(cumulative_raw)
                     break
+                except (TypeError, ValueError):
+                    continue
             distributed = self.fee_distributor_contract.call(
                 node_inquirer=self.evm_inquirer,
                 method_name='distributedShares',

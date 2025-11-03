@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING
@@ -32,11 +30,8 @@ class LidoCsmBalances(ProtocolWithBalance):
 
     def __init__(
             self,
-            evm_inquirer: EthereumInquirer,
-            tx_decoder: EthereumTransactionDecoder,
-            node_operator_db: DBLidoCsm | None = None,
-            accounting_contract: EvmContract | None = None,
-            steth_contract: EvmContract | None = None,
+            evm_inquirer: 'EthereumInquirer',
+            tx_decoder: 'EthereumTransactionDecoder',
     ) -> None:
         super().__init__(
             evm_inquirer=evm_inquirer,
@@ -44,23 +39,21 @@ class LidoCsmBalances(ProtocolWithBalance):
             counterparty=CPT_LIDO_CSM,
             deposit_event_types=set(),
         )
-        self._node_operator_db = node_operator_db or DBLidoCsm(self.event_db.db)
+        self._node_operator_db = DBLidoCsm(self.event_db.db)
         self._steth_token = A_STETH.resolve_to_evm_token()
-        self._accounting_contract = accounting_contract or EvmContract(
+        self._accounting_contract = EvmContract(
             address=LIDO_CSM_ACCOUNTING_CONTRACT,
             abi=ACCOUNTING_ABI,
             deployed_block=0,
         )
-        self._steth_contract = steth_contract or EvmContract(
+        self._steth_contract = EvmContract(
             address=self._steth_token.evm_address,
             abi=STETH_ABI,
             deployed_block=0,
         )
         # Reuse the metrics fetcher to compute pending rewards in stETH
         self._metrics_fetcher = LidoCsmMetricsFetcher(evm_inquirer=evm_inquirer)
-
-    def _get_node_operators(self) -> tuple[LidoCsmNodeOperator, ...]:
-        return self._node_operator_db.get_node_operators()
+        self._metrics_fetcher.steth_contract = self._steth_contract
 
     def _get_bond_shares(self, node_operator_id: int) -> int:
         return self._accounting_contract.call(
@@ -70,16 +63,18 @@ class LidoCsmBalances(ProtocolWithBalance):
         )
 
     def _convert_shares_to_steth(self, shares: int) -> FVal:
-        pooled_eth = self._steth_contract.call(
-            node_inquirer=self.evm_inquirer,
-            method_name='getPooledEthByShares',
-            arguments=[shares],
+        return asset_normalized_value(
+            amount=self._steth_contract.call(
+                node_inquirer=self.evm_inquirer,
+                method_name='getPooledEthByShares',
+                arguments=[shares],
+            ),
+            asset=self._steth_token,
         )
-        return asset_normalized_value(pooled_eth, A_STETH)
 
     def query_balances(self) -> BalancesSheetType:
         balances: BalancesSheetType = defaultdict(BalanceSheet)
-        node_operators = self._get_node_operators()
+        node_operators = self._node_operator_db.get_node_operators()
         if len(node_operators) == 0:
             return balances
 
@@ -91,11 +86,11 @@ class LidoCsmBalances(ProtocolWithBalance):
                 shares = self._get_bond_shares(entry.node_operator_id)
                 if shares != 0:
                     bond_steth = self._convert_shares_to_steth(shares=shares)
-            except RemoteError as exc:
+            except RemoteError as e:
                 log.error(
                     'Failed to fetch/convert Lido CSM bond shares for node operator %s due to %s',
                     entry.node_operator_id,
-                    exc,
+                    e,
                 )
 
             # Fetch pending rewards (stETH) using the metrics fetcher
@@ -103,15 +98,14 @@ class LidoCsmBalances(ProtocolWithBalance):
             try:
                 stats = self._metrics_fetcher.get_operator_stats(entry.node_operator_id)
                 rewards_steth = stats.rewards_steth
-            except RemoteError as exc:
+            except RemoteError as e:
                 log.error(
                     'Failed to fetch Lido CSM pending rewards for node operator %s due to %s',
                     entry.node_operator_id,
-                    exc,
+                    e,
                 )
 
-            total_steth = bond_steth + rewards_steth
-            if total_steth == ZERO:
+            if (total_steth := bond_steth + rewards_steth) == ZERO:
                 continue
 
             balances[entry.address].assets[self._steth_token][self.counterparty] += Balance(
