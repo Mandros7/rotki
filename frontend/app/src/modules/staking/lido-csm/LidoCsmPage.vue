@@ -2,7 +2,7 @@
 import type { AddressData, BlockchainAccount } from '@/types/blockchain/accounts';
 import { Blockchain } from '@rotki/common';
 import BlockchainAccountSelector from '@/components/helper/BlockchainAccountSelector.vue';
-import RefreshButton from '@/components/helper/RefreshButton.vue';
+import TablePageLayout from '@/components/layout/TablePageLayout.vue';
 import { useLidoCsmStore } from '@/store/staking/lido-csm';
 import { getAccountAddress } from '@/utils/blockchain/accounts/utils';
 
@@ -17,10 +17,11 @@ const removingEntryKey = ref<string>('');
 const dialogOpen = ref<boolean>(false);
 
 const lidoCsmStore = useLidoCsmStore();
-const { nodeOperators, loading } = storeToRefs(lidoCsmStore);
+const { loading, nodeOperators } = storeToRefs(lidoCsmStore);
 const { addNodeOperator, deleteNodeOperator, fetchNodeOperators, refreshAllNodeOperators } = lidoCsmStore;
 
 const { t } = useI18n({ useScope: 'global' });
+const { isDark } = useRotkiTheme();
 
 const selectedAddress = computed<string>(() => {
   const account = get(selectedAccount)[0];
@@ -86,7 +87,7 @@ interface LidoCsmTableRow {
   rewardsPending: string;
 }
 
-const tableRows = computed<LidoCsmTableRow[]>(() => get(nodeOperators).map(entry => {
+const tableRows = computed<LidoCsmTableRow[]>(() => get(nodeOperators).map((entry) => {
   const metrics = entry.metrics;
   const operatorType = metrics?.operatorType;
   const bond = metrics?.bond;
@@ -94,16 +95,16 @@ const tableRows = computed<LidoCsmTableRow[]>(() => get(nodeOperators).map(entry
   const rewards = metrics?.rewards;
 
   return {
-    key: `${entry.address}-${entry.nodeOperatorId}`,
     address: entry.address,
-    nodeOperatorId: entry.nodeOperatorId,
-    operatorTypeLabel: operatorType?.label ?? get(notAvailableLabel),
-    operatorTypeId: operatorType?.id ?? null,
+    bondClaimable: formatStEth(bond?.claimable ?? null),
     bondCurrent: formatStEth(bond?.current ?? null),
     bondRequired: formatStEth(bond?.required ?? null),
-    bondClaimable: formatStEth(bond?.claimable ?? null),
-    totalDeposited: formatCount(keys?.totalDeposited ?? null),
+    key: `${entry.address}-${entry.nodeOperatorId}`,
+    nodeOperatorId: entry.nodeOperatorId,
+    operatorTypeId: operatorType?.id ?? null,
+    operatorTypeLabel: operatorType?.label ?? get(notAvailableLabel),
     rewardsPending: formatStEth(rewards?.pending ?? null),
+    totalDeposited: formatCount(keys?.totalDeposited ?? null),
   };
 }));
 
@@ -186,201 +187,228 @@ defineExpose({
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
-    <div>
-      <h2 class="text-h5 font-semibold mb-2">
-        {{ t('staking_page.lido_csm.title') }}
-      </h2>
-      <p class="text-sm text-rui-text-secondary">
-        {{ t('staking_page.lido_csm.description') }}
-      </p>
-    </div>
-
-    <RuiCard>
-      <template #title>
-        {{ t('staking_page.lido_csm.table.title') }}
-      </template>
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <p class="text-sm text-rui-text-secondary">
-          {{ t('staking_page.lido_csm.table.description') }}
-        </p>
-        <div class="flex items-center gap-2 self-start sm:self-auto">
-          <RefreshButton
-            :loading="loading"
-            :tooltip="t('staking_page.lido_csm.table.refresh_tooltip')"
-            @refresh="handleRefresh()"
-          />
-          <RuiButton
-            color="primary"
-            :disabled="loading"
-            @click="openAddDialog()"
-          >
-            {{ t('staking_page.lido_csm.form.submit') }}
-          </RuiButton>
-        </div>
-      </div>
-
-      <div v-if="loading" class="space-y-3">
-        <RuiSkeletonLoader
-          v-for="i in 3"
-          :key="i"
-          class="h-12"
-        />
-      </div>
-      <div
-        v-else-if="!hasEntries"
-        class="text-sm text-rui-text-secondary py-4"
+  <TablePageLayout
+    :title="[t('navigation_menu.staking'), t('staking_page.lido_csm.title')]"
+    child
+  >
+    <template #buttons>
+      <RuiButton
+        color="primary"
+        :disabled="loading"
+        @click="openAddDialog()"
       >
-        {{ t('staking_page.lido_csm.table.empty') }}
-      </div>
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full text-left text-sm">
-          <thead>
-            <tr class="border-b border-rui-grey-200 dark:border-rui-grey-800 text-xs uppercase tracking-wide text-rui-text-secondary">
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.address') }}
-              </th>
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.node_operator') }}
-              </th>
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.operator_type') }}
-              </th>
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.bond_current') }}
-              </th>
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.bond_required') }}
-              </th>
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.bond_claimable') }}
-              </th>
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.keys_total') }}
-              </th>
-              <th class="py-3 pr-4">
-                {{ t('staking_page.lido_csm.table.rewards_pending') }}
-              </th>
-              <th class="py-3 pr-3 text-right">
-                {{ t('staking_page.lido_csm.table.actions') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in tableRows"
-              :key="row.key"
-              class="border-b border-rui-grey-100 dark:border-rui-grey-900 last:border-b-0"
-            >
-              <td class="py-3 pr-4 font-mono break-all text-sm">
-                {{ row.address }}
-              </td>
-              <td class="py-3 pr-4 text-sm">
-                {{ row.nodeOperatorId }}
-              </td>
-              <td class="py-3 pr-4 text-sm">
-                <div class="font-medium">
-                  {{ row.operatorTypeLabel }}
-                </div>
-              </td>
-              <td class="py-3 pr-4 text-sm">
-                {{ row.bondCurrent }}
-              </td>
-              <td class="py-3 pr-4 text-sm">
-                {{ row.bondRequired }}
-              </td>
-              <td class="py-3 pr-4 text-sm">
-                {{ row.bondClaimable }}
-              </td>
-              <td class="py-3 pr-4 text-sm">
-                {{ row.totalDeposited }}
-              </td>
-              <td class="py-3 pr-4 text-sm">
-                {{ row.rewardsPending }}
-              </td>
-              <td class="py-2 pr-2">
-                <div class="flex justify-end gap-1">
-                  <RuiButton
-                    color="error"
-                    variant="text"
-                    size="sm"
-                    :loading="removingEntryKey === row.key"
-                    @click="handleRemove(row.address, row.nodeOperatorId)"
-                  >
-                    {{ t('staking_page.lido_csm.table.remove') }}
-                  </RuiButton>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </RuiCard>
-
-    <RuiDialog
-      v-model="dialogOpen"
-      max-width="520"
-    >
-      <RuiCard
-        divide
-        no-padding
-        content-class="overflow-hidden"
-      >
-        <template #header>
-          {{ t('staking_page.lido_csm.form.title') }}
-        </template>
-        <RuiButton
-          variant="text"
-          class="absolute top-2 right-2"
-          icon
-          @click="closeDialog()"
-        >
+        <template #prepend>
           <RuiIcon
-            class="text-white"
-            name="lu-x"
+            name="lu-plus"
+            size="18"
           />
-        </RuiButton>
-        <div class="p-4 space-y-6">
-          <p class="text-sm text-rui-text-secondary">
-            {{ dialogDescription }}
-          </p>
-          <div class="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <BlockchainAccountSelector
-              v-model="selectedAccount"
-              :chains="[Blockchain.ETH]"
-              outlined
-              :label="t('staking_page.lido_csm.form.address_label')"
-              :custom-hint="t('staking_page.lido_csm.form.address_hint')"
-            />
-            <RuiTextField
-              v-model="nodeOperatorId"
-              type="number"
-              min="0"
-              step="1"
-              :label="t('staking_page.lido_csm.form.node_operator_label')"
-              :hint="t('staking_page.lido_csm.form.node_operator_hint')"
-              :error-messages="nodeOperatorInputErrors"
-              outlined
-            />
-          </div>
-        </div>
-        <div class="flex justify-end gap-2 px-4 pb-4">
-          <RuiButton
-            variant="text"
-            @click="closeDialog()"
-          >
-            {{ t('common.actions.cancel') }}
-          </RuiButton>
+        </template>
+        {{ t('staking_page.lido_csm.form.submit') }}
+      </RuiButton>
+      <RuiTooltip :open-delay="400">
+        <template #activator>
           <RuiButton
             color="primary"
-            :loading="submitting"
-            :disabled="!formValid"
-            @click="submitForm()"
+            variant="outlined"
+            :loading="loading"
+            @click="handleRefresh()"
           >
-            {{ t('staking_page.lido_csm.form.submit') }}
+            <template #prepend>
+              <RuiIcon name="lu-refresh-ccw" />
+            </template>
+            {{ t('common.refresh') }}
           </RuiButton>
+        </template>
+        {{ t('staking_page.lido_csm.table.refresh_tooltip') }}
+      </RuiTooltip>
+    </template>
+    <div class="flex flex-col gap-6">
+      <div>
+        <p class="text-sm text-rui-text-secondary">
+          {{ t('staking_page.lido_csm.description') }}
+        </p>
+      </div>
+
+      <RuiCard>
+        <div
+          v-if="loading"
+          class="space-y-3"
+        >
+          <RuiSkeletonLoader
+            v-for="i in 3"
+            :key="i"
+            class="h-12"
+          />
+        </div>
+        <div
+          v-else-if="!hasEntries"
+          class="flex flex-col items-center text-center text-rui-text-secondary py-8"
+        >
+          <img
+            :src="isDark ? '/assets/images/placeholder/table_no_data_placeholder_dark.svg' : '/assets/images/placeholder/table_no_data_placeholder.svg'"
+            :alt="t('staking_page.lido_csm.table.empty')"
+            class="h-32"
+          />
+          {{ t('staking_page.lido_csm.table.empty') }}
+        </div>
+        <div
+          v-else
+          class="overflow-x-auto"
+        >
+          <p class="text-sm text-rui-text-secondary">
+            {{ t('staking_page.lido_csm.table.description') }}
+          </p>
+          <table class="min-w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-rui-grey-200 dark:border-rui-grey-800 text-xs uppercase tracking-wide text-rui-text-secondary">
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.address') }}
+                </th>
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.node_operator') }}
+                </th>
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.operator_type') }}
+                </th>
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.bond_current') }}
+                </th>
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.bond_required') }}
+                </th>
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.bond_claimable') }}
+                </th>
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.keys_total') }}
+                </th>
+                <th class="py-3 pr-4">
+                  {{ t('staking_page.lido_csm.table.rewards_pending') }}
+                </th>
+                <th class="py-3 pr-3 text-right">
+                  {{ t('staking_page.lido_csm.table.actions') }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in tableRows"
+                :key="row.key"
+                class="border-b border-rui-grey-100 dark:border-rui-grey-900 last:border-b-0"
+              >
+                <td class="py-3 pr-4 font-mono break-all text-sm">
+                  {{ row.address }}
+                </td>
+                <td class="py-3 pr-4 text-sm">
+                  {{ row.nodeOperatorId }}
+                </td>
+                <td class="py-3 pr-4 text-sm">
+                  <div class="font-medium">
+                    {{ row.operatorTypeLabel }}
+                  </div>
+                </td>
+                <td class="py-3 pr-4 text-sm">
+                  {{ row.bondCurrent }}
+                </td>
+                <td class="py-3 pr-4 text-sm">
+                  {{ row.bondRequired }}
+                </td>
+                <td class="py-3 pr-4 text-sm">
+                  {{ row.bondClaimable }}
+                </td>
+                <td class="py-3 pr-4 text-sm">
+                  {{ row.totalDeposited }}
+                </td>
+                <td class="py-3 pr-4 text-sm">
+                  {{ row.rewardsPending }}
+                </td>
+                <td class="py-2 pr-2">
+                  <div class="flex justify-end gap-1">
+                    <RuiButton
+                      color="error"
+                      variant="text"
+                      size="sm"
+                      :loading="removingEntryKey === row.key"
+                      @click="handleRemove(row.address, row.nodeOperatorId)"
+                    >
+                      {{ t('staking_page.lido_csm.table.remove') }}
+                    </RuiButton>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </RuiCard>
-    </RuiDialog>
-  </div>
+
+      <RuiDialog
+        v-model="dialogOpen"
+        max-width="520"
+      >
+        <RuiCard
+          divide
+          no-padding
+          content-class="overflow-hidden"
+        >
+          <template #header>
+            {{ t('staking_page.lido_csm.form.title') }}
+          </template>
+          <RuiButton
+            variant="text"
+            class="absolute top-2 right-2"
+            icon
+            @click="closeDialog()"
+          >
+            <RuiIcon
+              class="text-white"
+              name="lu-x"
+            />
+          </RuiButton>
+          <div class="p-4 space-y-6">
+            <p class="text-sm text-rui-text-secondary">
+              {{ dialogDescription }}
+            </p>
+            <div class="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <BlockchainAccountSelector
+                v-model="selectedAccount"
+                :chains="[Blockchain.ETH]"
+                outlined
+                :label="t('staking_page.lido_csm.form.address_label')"
+                :custom-hint="t('staking_page.lido_csm.form.address_hint')"
+              />
+              <RuiTextField
+                v-model="nodeOperatorId"
+                type="number"
+                min="0"
+                step="1"
+                color="primary"
+                :label="t('staking_page.lido_csm.form.node_operator_label')"
+                :hint="t('staking_page.lido_csm.form.node_operator_hint')"
+                :error-messages="nodeOperatorInputErrors"
+                variant="outlined"
+              />
+            </div>
+          </div>
+          <template #footer>
+            <div class="w-full flex justify-end gap-2 pt-2">
+              <RuiButton
+                variant="text"
+                @click="closeDialog()"
+              >
+                {{ t('common.actions.cancel') }}
+              </RuiButton>
+              <RuiButton
+                color="primary"
+                :loading="submitting"
+                :disabled="!formValid"
+                @click="submitForm()"
+              >
+                {{ t('staking_page.lido_csm.form.submit') }}
+              </RuiButton>
+            </div>
+          </template>
+        </RuiCard>
+      </RuiDialog>
+    </div>
+  </TablePageLayout>
 </template>
