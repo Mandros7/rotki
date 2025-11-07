@@ -16,9 +16,13 @@ from .constants import (
     CSM_MODULE_ABI,
     FEE_DISTRIBUTOR_ABI,
     LIDO_CSM_ACCOUNTING_CONTRACT,
+    LIDO_CSM_ACCOUNTING_CONTRACT_DEPLOYED_BLOCK,
     LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT,
+    LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT_DEPLOYED_BLOCK,
     LIDO_CSM_IPFS_GATEWAY,
     LIDO_CSM_MODULE_CONTRACT,
+    LIDO_CSM_MODULE_CONTRACT_DEPLOYED_BLOCK,
+    LIDO_STETH_DEPLOYED_BLOCK
     STETH_ABI,
 )
 
@@ -67,23 +71,23 @@ class LidoCsmMetricsFetcher:
         self.accounting_contract = EvmContract(
             address=LIDO_CSM_ACCOUNTING_CONTRACT,
             abi=ACCOUNTING_ABI,
-            deployed_block=0,
+            deployed_block=LIDO_CSM_ACCOUNTING_CONTRACT_DEPLOYED_BLOCK,
         )
         self.module_contract = EvmContract(
             address=LIDO_CSM_MODULE_CONTRACT,
             abi=CSM_MODULE_ABI,
-            deployed_block=0,
+            deployed_block=LIDO_CSM_MODULE_CONTRACT_DEPLOYED_BLOCK,
         )
         steth_token = A_STETH.resolve_to_evm_token()
         self.steth_contract = EvmContract(
             address=steth_token.evm_address,
             abi=STETH_ABI,
-            deployed_block=0,
+            deployed_block=LIDO_STETH_DEPLOYED_BLOCK,
         )
         self.fee_distributor_contract = EvmContract(
             address=LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT,
             abi=FEE_DISTRIBUTOR_ABI,
-            deployed_block=0,
+            deployed_block=LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT_DEPLOYED_BLOCK,
         )
         self.evm_inquirer = evm_inquirer
 

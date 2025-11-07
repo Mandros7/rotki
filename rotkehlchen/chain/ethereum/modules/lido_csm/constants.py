@@ -2,9 +2,15 @@ from typing import Final
 
 from rotkehlchen.chain.evm.types import ChecksumEvmAddress, string_to_evm_address
 
+LIDO_STETH_DEPLOYED_BLOCK: Final[int] = 11473216
+
 LIDO_CSM_ACCOUNTING_CONTRACT: Final[ChecksumEvmAddress] = string_to_evm_address('0x4d72BFF1BeaC69925F8Bd12526a39BAAb069e5Da')
 
+LIDO_CSM_ACCOUNTING_CONTRACT_DEPLOYED_BLOCK: Final[int] = 20935462
+
 LIDO_CSM_MODULE_CONTRACT: Final[ChecksumEvmAddress] = string_to_evm_address('0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F')
+
+LIDO_CSM_MODULE_CONTRACT_DEPLOYED_BLOCK: Final[int] = 20935462
 
 ACCOUNTING_ABI: Final = [{
     'inputs': [{'internalType': 'uint256', 'name': 'nodeOperatorId', 'type': 'uint256'}],
@@ -59,6 +65,8 @@ BOND_CURVE_TYPE_LABELS: Final[dict[int, str]] = {
 
 # ICS Fee Distributor contract (mainnet) for operator rewards
 LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT: Final[ChecksumEvmAddress] = string_to_evm_address('0xD99CC66fEC647E68294C6477B40fC7E0F6F618D0')
+
+LIDO_CSM_FEE_DISTRIBUTOR_CONTRACT_DEPLOYED_BLOCK: Final[int] = 20935463
 
 FEE_DISTRIBUTOR_ABI: Final = [{
     'inputs': [],

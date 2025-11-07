@@ -68,19 +68,23 @@ def _serialize_metrics_row(row: tuple[Any, ...]) -> dict[str, Any] | None:
     return metrics
 
 
-def _parse_metrics_payload(metrics: dict[str, Any]) -> tuple[Any, ...]:
-    operator_type = metrics.get('operator_type') if isinstance(metrics, dict) else None
-    bond = metrics.get('bond') if isinstance(metrics, dict) else None
-    keys = metrics.get('keys') if isinstance(metrics, dict) else None
-    rewards = metrics.get('rewards') if isinstance(metrics, dict) else None
+def _dict_get(data: Any, key: str) -> Any:
+    return data.get(key) if isinstance(data, dict) else None
 
-    operator_type_id = operator_type.get('id') if isinstance(operator_type, dict) else None
-    operator_type_label = operator_type.get('label') if isinstance(operator_type, dict) else None
-    bond_current = bond.get('current') if isinstance(bond, dict) else None
-    bond_required = bond.get('required') if isinstance(bond, dict) else None
-    bond_claimable = bond.get('claimable') if isinstance(bond, dict) else None
-    total_deposited_keys = keys.get('total_deposited') if isinstance(keys, dict) else None
-    rewards_pending = rewards.get('pending') if isinstance(rewards, dict) else None
+
+def _parse_metrics_payload(metrics: dict[str, Any]) -> tuple[Any, ...]:
+    operator_type = _dict_get(metrics, 'operator_type')
+    bond = _dict_get(metrics, 'bond')
+    keys = _dict_get(metrics, 'keys')
+    rewards = _dict_get(metrics, 'rewards')
+
+    operator_type_id = _dict_get(operator_type, 'id')
+    operator_type_label = _dict_get(operator_type, 'label')
+    bond_current = _dict_get(bond, 'current')
+    bond_required = _dict_get(bond, 'required')
+    bond_claimable = _dict_get(bond, 'claimable')
+    total_deposited_keys = _dict_get(keys, 'total_deposited')
+    rewards_pending = _dict_get(rewards, 'pending')
 
     return (
         operator_type_id,
