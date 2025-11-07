@@ -34,15 +34,12 @@ def test_lido_csm_metrics_fetcher_converts_values() -> None:
         'distributedShares': 2 * 10**17,
     })
 
-    fetcher = LidoCsmMetricsFetcher(
-        evm_inquirer=SimpleNamespace(),
-        accounting_contract=accounting_contract,  # type: ignore[arg-type]
-        module_contract=module_contract,  # type: ignore[arg-type]
-        steth_contract=steth_contract,  # type: ignore[arg-type]
-        fee_distributor_contract=fee_distributor_contract,  # type: ignore[arg-type]
-    )
+    fetcher = LidoCsmMetricsFetcher(evm_inquirer=SimpleNamespace())
+    fetcher.accounting_contract = accounting_contract  # type: ignore[assignment]
+    fetcher.module_contract = module_contract  # type: ignore[assignment]
+    fetcher.steth_contract = steth_contract  # type: ignore[assignment]
+    fetcher.fee_distributor_contract = fee_distributor_contract  # type: ignore[assignment]
 
-    # Monkeypatch IPFS fetch to return a doc with values [[id, cumulativeShares]]
     def fake_fetch_ipfs_json(_cid: str) -> dict:
         return {
             'values': [

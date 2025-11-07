@@ -1,18 +1,30 @@
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+import pytest
 from eth_utils import to_checksum_address
 
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.chain.ethereum.modules.lido_csm.balances import LidoCsmBalances
-from rotkehlchen.chain.ethereum.modules.lido_csm.metrics import LidoCsmMetricsFetcher, LidoCsmNodeOperatorStats
+from rotkehlchen.chain.ethereum.modules.lido_csm.metrics import (
+    LidoCsmMetricsFetcher,
+    LidoCsmNodeOperatorStats,
+)
 from rotkehlchen.chain.ethereum.modules.lido_csm.constants import CPT_LIDO_CSM
+from rotkehlchen.chain.evm.types import string_to_evm_address
+from rotkehlchen.constants import ZERO
 from rotkehlchen.constants.assets import A_STETH
-from rotkehlchen.db.lido_csm import LidoCsmNodeOperator
+from rotkehlchen.db.lido_csm import DBLidoCsm, LidoCsmNodeOperator
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.fval import FVal
 from rotkehlchen.inquirer import Inquirer
+from rotkehlchen.tests.utils.ethereum import INFURA_ETH_NODE, wait_until_all_nodes_connected
 from rotkehlchen.types import ChainID
+
+if TYPE_CHECKING:
+    from rotkehlchen.chain.ethereum.decoding.decoder import EthereumTransactionDecoder
+    from rotkehlchen.chain.ethereum.node_inquirer import EthereumInquirer
 
 
 def _make_evm_inquirer():
@@ -106,3 +118,34 @@ def test_lido_csm_balances_skips_on_error():
         )
         result = balances.query_balances()
     assert len(result) == 0
+
+
+@pytest.mark.vcr(filter_query_parameters=['apikey'])
+@pytest.mark.parametrize('ethereum_manager_connect_at_start', [(INFURA_ETH_NODE,)])
+def test_lido_csm_balances_real_data(
+        ethereum_inquirer: 'EthereumInquirer',
+        ethereum_transaction_decoder: 'EthereumTransactionDecoder',
+        ethereum_manager_connect_at_start,
+        database,
+        inquirer,
+):
+    """Queries the real Lido CSM contracts for node operator id 1 using VCR."""
+    wait_until_all_nodes_connected(
+        connect_at_start=ethereum_manager_connect_at_start,
+        evm_inquirer=ethereum_inquirer,
+    )
+    _ = inquirer  # ensure global Inquirer singleton is initialized for price lookups
+    node_operator_address = string_to_evm_address('0xbB8311c7bAD518f0D8f907Cad26c5CcC85a06dC4')
+    db = DBLidoCsm(database)
+    db.add_node_operator(address=node_operator_address, node_operator_id=1)
+
+    balances = LidoCsmBalances(
+        evm_inquirer=ethereum_inquirer,
+        tx_decoder=ethereum_transaction_decoder,
+    )
+    result = balances.query_balances()
+
+    steth_token = A_STETH.resolve_to_evm_token()
+    operator_balance = result[node_operator_address].assets[steth_token][CPT_LIDO_CSM]
+    assert operator_balance.amount > ZERO
+    assert operator_balance.usd_value > ZERO

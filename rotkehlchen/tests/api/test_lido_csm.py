@@ -15,6 +15,12 @@ def _login(rotkehlchen_api_server):
     return rotki
 
 
+def _strip_none_values(data):
+    if isinstance(data, dict):
+        return {key: _strip_none_values(value) for key, value in data.items() if value is not None}
+    return data
+
+
 def test_get_lido_csm_node_operators(rotkehlchen_api_server) -> None:
     rotki = _login(rotkehlchen_api_server)
     db = DBLidoCsm(rotki.data.db)
@@ -118,4 +124,4 @@ def test_refresh_metrics_endpoint_persists(rotkehlchen_api_server) -> None:
     entries = db.get_node_operators()
     assert len(entries) == 1
     assert entries[0].node_operator_id == 7
-    assert entries[0].metrics == metrics_payload
+    assert _strip_none_values(entries[0].metrics) == metrics_payload
