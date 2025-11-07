@@ -68,7 +68,7 @@ const staking = computed<StakingInfo[]>(() => [
   },
   {
     id: 'lido-csm',
-    image: getPublicProtocolImagePath('lido.svg'),
+    image: getPublicProtocolImagePath('lido_csm.svg'),
     name: t('staking.lido_csm'),
   },
 ]);
