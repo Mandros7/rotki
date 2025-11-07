@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { Blockchain } from '@rotki/common';
+import type { DataTableColumn } from '@rotki/ui-library';
+import { BigNumber, Blockchain, bigNumberify } from '@rotki/common';
 import BlockchainAccountSelector from '@/components/helper/BlockchainAccountSelector.vue';
+import AmountDisplay from '@/components/display/amount/AmountDisplay.vue';
+import AssetIcon from '@/components/helper/display/icons/AssetIcon.vue';
 import TablePageLayout from '@/components/layout/TablePageLayout.vue';
 import { useLidoCsmApi } from '@/composables/api/staking/lido-csm';
 import type { AddressData, BlockchainAccount } from '@/types/blockchain/accounts';
@@ -14,6 +17,8 @@ defineOptions({
 
 const { t } = useI18n({ useScope: 'global' });
 const { isDark } = useRotkiTheme();
+
+const STETH_IDENTIFIER = 'eip155:1/erc20:0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84';
 
 const nodeOperators = ref<LidoCsmNodeOperator[]>([]);
 const loading = ref<boolean>(false);
@@ -57,15 +62,19 @@ const formValid = computed<boolean>(() => {
 
 const notAvailableLabel = computed<string>(() => t('staking_page.lido_csm.table.not_available'));
 const dialogDescription = computed<string>(() => t('staking_page.lido_csm.form.description'));
-const stEthFormatter = new Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 6,
-});
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error)
     return error.message;
 
   return String(error);
+}
+
+function toBigNumberValue(value?: BigNumber | string | number | null): BigNumber | null {
+  if (value === undefined || value === null)
+    return null;
+
+  return BigNumber.isBigNumber(value) ? value : bigNumberify(value);
 }
 
 async function fetchNodeOperators(): Promise<void> {
@@ -122,15 +131,6 @@ async function deleteNodeOperator(payload: LidoCsmNodeOperatorPayload): Promise<
   }
 }
 
-function formatStEth(value?: string | null): string {
-  if (!value)
-    return get(notAvailableLabel);
-
-  const numericValue = Number(value);
-  const formatted = Number.isFinite(numericValue) ? stEthFormatter.format(numericValue) : value;
-  return `${formatted} stETH`;
-}
-
 function formatCount(value?: number | null): string {
   if (value === undefined || value === null)
     return get(notAvailableLabel);
@@ -144,11 +144,11 @@ interface LidoCsmTableRow {
   nodeOperatorId: number;
   operatorTypeLabel: string;
   operatorTypeId: number | null;
-  bondCurrent: string;
-  bondRequired: string;
-  bondClaimable: string;
+  bondCurrent: BigNumber | null;
+  bondRequired: BigNumber | null;
+  bondClaimable: BigNumber | null;
   totalDeposited: string;
-  rewardsPending: string;
+  rewardsPending: BigNumber | null;
 }
 
 const tableRows = computed<LidoCsmTableRow[]>(() => get(nodeOperators).map((entry) => {
@@ -160,17 +160,47 @@ const tableRows = computed<LidoCsmTableRow[]>(() => get(nodeOperators).map((entr
 
   return {
     address: entry.address,
-    bondClaimable: formatStEth(bond?.claimable ?? null),
-    bondCurrent: formatStEth(bond?.current ?? null),
-    bondRequired: formatStEth(bond?.required ?? null),
+    bondClaimable: toBigNumberValue(bond?.claimable ?? null),
+    bondCurrent: toBigNumberValue(bond?.current ?? null),
+    bondRequired: toBigNumberValue(bond?.required ?? null),
     key: `${entry.address}-${entry.nodeOperatorId}`,
     nodeOperatorId: entry.nodeOperatorId,
     operatorTypeId: operatorType?.id ?? null,
     operatorTypeLabel: operatorType?.label ?? get(notAvailableLabel),
-    rewardsPending: formatStEth(rewards?.pending ?? null),
+    rewardsPending: toBigNumberValue(rewards?.pending ?? null),
     totalDeposited: formatCount(keys?.totalDeposited ?? null),
   };
 }));
+
+const tableColumns = computed<DataTableColumn<LidoCsmTableRow>[]>(() => [{
+  key: 'address',
+  label: t('staking_page.lido_csm.table.address'),
+}, {
+  key: 'nodeOperatorId',
+  label: t('staking_page.lido_csm.table.node_operator'),
+}, {
+  key: 'operatorTypeLabel',
+  label: t('staking_page.lido_csm.table.operator_type'),
+}, {
+  key: 'bondCurrent',
+  label: t('staking_page.lido_csm.table.bond_current'),
+}, {
+  key: 'bondRequired',
+  label: t('staking_page.lido_csm.table.bond_required'),
+}, {
+  key: 'bondClaimable',
+  label: t('staking_page.lido_csm.table.bond_claimable'),
+}, {
+  key: 'totalDeposited',
+  label: t('staking_page.lido_csm.table.keys_total'),
+}, {
+  key: 'rewardsPending',
+  label: t('staking_page.lido_csm.table.rewards_pending'),
+}, {
+  key: 'actions',
+  label: t('staking_page.lido_csm.table.actions'),
+  align: 'end',
+}]);
 
 const hasEntries = computed<boolean>(() => get(tableRows).length > 0);
 
@@ -316,91 +346,149 @@ defineExpose({
         </div>
         <div
           v-else
-          class="overflow-x-auto"
+          class="space-y-4 overflow-x-auto"
         >
           <p class="text-sm text-rui-text-secondary">
             {{ t('staking_page.lido_csm.table.description') }}
           </p>
-          <table class="min-w-full text-left text-sm">
-            <thead>
-              <tr class="border-b border-rui-grey-200 dark:border-rui-grey-800 text-xs uppercase tracking-wide text-rui-text-secondary">
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.address') }}
-                </th>
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.node_operator') }}
-                </th>
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.operator_type') }}
-                </th>
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.bond_current') }}
-                </th>
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.bond_required') }}
-                </th>
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.bond_claimable') }}
-                </th>
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.keys_total') }}
-                </th>
-                <th class="py-3 pr-4">
-                  {{ t('staking_page.lido_csm.table.rewards_pending') }}
-                </th>
-                <th class="py-3 pr-3 text-right">
-                  {{ t('staking_page.lido_csm.table.actions') }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="row in tableRows"
-                :key="row.key"
-                class="border-b border-rui-grey-100 dark:border-rui-grey-900 last:border-b-0"
+          <RuiDataTable
+            dense
+            outlined
+            class="min-w-full"
+            row-attr="key"
+            :cols="tableColumns"
+            :rows="tableRows"
+          >
+            <template #item.address="{ row }">
+              <span class="font-mono break-all text-sm">
+                {{ row.address }}
+              </span>
+            </template>
+            <template #item.nodeOperatorId="{ row }">
+              <span class="text-sm">
+                {{ row.nodeOperatorId }}
+              </span>
+            </template>
+            <template #item.operatorTypeLabel="{ row }">
+              <span class="font-medium text-sm">
+                {{ row.operatorTypeLabel }}
+              </span>
+            </template>
+            <template #item.bondCurrent="{ row }">
+              <div
+                v-if="row.bondCurrent"
+                class="flex items-center gap-2 text-sm"
               >
-                <td class="py-3 pr-4 font-mono break-all text-sm">
-                  {{ row.address }}
-                </td>
-                <td class="py-3 pr-4 text-sm">
-                  {{ row.nodeOperatorId }}
-                </td>
-                <td class="py-3 pr-4 text-sm">
-                  <div class="font-medium">
-                    {{ row.operatorTypeLabel }}
-                  </div>
-                </td>
-                <td class="py-3 pr-4 text-sm">
-                  {{ row.bondCurrent }}
-                </td>
-                <td class="py-3 pr-4 text-sm">
-                  {{ row.bondRequired }}
-                </td>
-                <td class="py-3 pr-4 text-sm">
-                  {{ row.bondClaimable }}
-                </td>
-                <td class="py-3 pr-4 text-sm">
-                  {{ row.totalDeposited }}
-                </td>
-                <td class="py-3 pr-4 text-sm">
-                  {{ row.rewardsPending }}
-                </td>
-                <td class="py-2 pr-2">
-                  <div class="flex justify-end gap-1">
-                    <RuiButton
-                      color="error"
-                      variant="text"
-                      size="sm"
-                      :loading="removingEntryKey === row.key"
-                      @click="handleRemove(row.address, row.nodeOperatorId)"
-                    >
-                      {{ t('staking_page.lido_csm.table.remove') }}
-                    </RuiButton>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                <AssetIcon
+                  :identifier="STETH_IDENTIFIER"
+                  size="20px"
+                  no-tooltip
+                />
+                <AmountDisplay
+                  show-currency="ticker"
+                  force-currency
+                  :asset="STETH_IDENTIFIER"
+                  :value="row.bondCurrent"
+                />
+              </div>
+              <span
+                v-else
+                class="text-sm text-rui-text-secondary"
+              >
+                {{ notAvailableLabel }}
+              </span>
+            </template>
+            <template #item.bondRequired="{ row }">
+              <div
+                v-if="row.bondRequired"
+                class="flex items-center gap-2 text-sm"
+              >
+                <AssetIcon
+                  :identifier="STETH_IDENTIFIER"
+                  size="20px"
+                  no-tooltip
+                />
+                <AmountDisplay
+                  show-currency="ticker"
+                  force-currency
+                  :asset="STETH_IDENTIFIER"
+                  :value="row.bondRequired"
+                />
+              </div>
+              <span
+                v-else
+                class="text-sm text-rui-text-secondary"
+              >
+                {{ notAvailableLabel }}
+              </span>
+            </template>
+            <template #item.bondClaimable="{ row }">
+              <div
+                v-if="row.bondClaimable"
+                class="flex items-center gap-2 text-sm"
+              >
+                <AssetIcon
+                  :identifier="STETH_IDENTIFIER"
+                  size="20px"
+                  no-tooltip
+                />
+                <AmountDisplay
+                  show-currency="ticker"
+                  force-currency
+                  :asset="STETH_IDENTIFIER"
+                  :value="row.bondClaimable"
+                />
+              </div>
+              <span
+                v-else
+                class="text-sm text-rui-text-secondary"
+              >
+                {{ notAvailableLabel }}
+              </span>
+            </template>
+            <template #item.totalDeposited="{ row }">
+              <span class="text-sm">
+                {{ row.totalDeposited }}
+              </span>
+            </template>
+            <template #item.rewardsPending="{ row }">
+              <div
+                v-if="row.rewardsPending"
+                class="flex items-center gap-2 text-sm"
+              >
+                <AssetIcon
+                  :identifier="STETH_IDENTIFIER"
+                  size="20px"
+                  no-tooltip
+                />
+                <AmountDisplay
+                  show-currency="ticker"
+                  force-currency
+                  :asset="STETH_IDENTIFIER"
+                  :value="row.rewardsPending"
+                />
+              </div>
+              <span
+                v-else
+                class="text-sm text-rui-text-secondary"
+              >
+                {{ notAvailableLabel }}
+              </span>
+            </template>
+            <template #item.actions="{ row }">
+              <div class="flex justify-end gap-1">
+                <RuiButton
+                  color="error"
+                  variant="text"
+                  size="sm"
+                  :loading="removingEntryKey === row.key"
+                  @click="handleRemove(row.address, row.nodeOperatorId)"
+                >
+                  {{ t('staking_page.lido_csm.table.remove') }}
+                </RuiButton>
+              </div>
+            </template>
+          </RuiDataTable>
         </div>
       </RuiCard>
 
