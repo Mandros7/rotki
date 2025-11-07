@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from rotkehlchen.accounting.structures.balance import Balance, BalanceSheet
 from rotkehlchen.chain.ethereum.interfaces.balances import BalancesSheetType, ProtocolWithBalance
-from rotkehlchen.chain.ethereum.utils import asset_normalized_value
+from rotkehlchen.assets.utils import asset_normalized_value
 from rotkehlchen.chain.evm.contracts import EvmContract
 from rotkehlchen.constants.assets import A_STETH
 from rotkehlchen.constants.misc import ZERO
