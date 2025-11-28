@@ -124,7 +124,7 @@ class LidoCsmBalances(ProtocolWithBalance):
             if (total_steth := bond_steth + rewards_steth) == ZERO:
                 continue
 
-            balances[entry.address].assets[self._steth_token][self.counterparty] += Balance(
+            balances[entry.address].assets[A_STETH][self.counterparty] += Balance(
                 amount=total_steth,
                 usd_value=total_steth * steth_price,
             )
