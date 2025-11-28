@@ -60,7 +60,7 @@ export const LidoCsmNodeOperatorPayloadSchema = z.object({
 export type LidoCsmNodeOperatorPayload = z.infer<typeof LidoCsmNodeOperatorPayloadSchema>;
 
 const LidoCsmOperatorTypeSchema = z.object({
-  id: z.number().int().nonnegative().optional(),
+  id: z.number().int().optional(),
   label: z.string().optional(),
 }).strict().partial();
 

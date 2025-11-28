@@ -50,7 +50,7 @@ class DBLidoCsm:
         try:
             operator_type = LidoCsmOperatorType(int(operator_type_id))
         except (ValueError, TypeError):
-            operator_type = None
+            operator_type = LidoCsmOperatorType.UNKNOWN
 
         return LidoCsmNodeOperatorStats(
             operator_type=operator_type,
@@ -122,15 +122,30 @@ class DBLidoCsm:
             node_operator_id: int,
             metrics: LidoCsmNodeOperatorStats,
     ) -> None:
-        """Persist metrics for a tracked operator; raises InputError if it is missing."""
-        with self.db.user_write() as write_cursor:
-            existing = write_cursor.execute(
+        """Persist metrics for a tracked operator.
+
+        May raise:
+            InputError: if the node operator id is unknown.
+        """
+        with self.db.conn.read_ctx() as cursor:
+            existing = cursor.execute(
                 'SELECT 1 FROM lido_csm_node_operators WHERE node_operator_id=?',
                 (node_operator_id,),
             ).fetchone()
-            if existing is None:
-                raise InputError(f'Node operator id {node_operator_id} is not tracked')
+        if existing is None:
+            raise InputError(f'Node operator id {node_operator_id} is not tracked')
 
+        payload = (
+            node_operator_id,
+            int(metrics.operator_type),
+            str(metrics.current_bond),
+            str(metrics.required_bond),
+            str(metrics.claimable_bond),
+            metrics.total_deposited_validators,
+            str(metrics.rewards_steth),
+            ts_now(),
+        )
+        with self.db.user_write() as write_cursor:
             write_cursor.execute(
                 """
                 INSERT INTO lido_csm_node_operator_metrics(
@@ -152,16 +167,7 @@ class DBLidoCsm:
                     rewards_pending=excluded.rewards_pending,
                     updated_ts=excluded.updated_ts
                 """,
-                (
-                    node_operator_id,
-                    int(metrics.operator_type) if metrics.operator_type is not None else None,
-                    str(metrics.current_bond),
-                    str(metrics.required_bond),
-                    str(metrics.claimable_bond),
-                    metrics.total_deposited_validators,
-                    str(metrics.rewards_steth),
-                    ts_now(),
-                ),
+                payload,
             )
 
     def delete_metrics(self, node_operator_id: int) -> None:
@@ -177,23 +183,23 @@ class DBLidoCsm:
             node_operator_id: int,
     ) -> None:
         """Delete a node operator; raises InputError when id is unknown or address mismatched."""
-        with self.db.user_write() as write_cursor:
-            row = write_cursor.execute(
+        with self.db.conn.read_ctx() as cursor:
+            row = cursor.execute(
                 'SELECT address FROM lido_csm_node_operators WHERE node_operator_id=?',
                 (node_operator_id,),
             ).fetchone()
-            if row is None:
-                raise InputError(
-                    f'Node operator with id {node_operator_id} for {address} is not tracked',
-                )
+        if row is None:
+            raise InputError(
+                f'Node operator with id {node_operator_id} for {address} is not tracked',
+            )
 
-            stored_address = ChecksumEvmAddress(row[0])
-            if stored_address != address:
-                raise InputError(
-                    f'Node operator id {node_operator_id} is tracked for {stored_address}, '
-                    f'not {address}',
-                )
+        if (stored_address := ChecksumEvmAddress(row[0])) != address:
+            raise InputError(
+                f'Node operator id {node_operator_id} is tracked for {stored_address}, '
+                f'not {address}',
+            )
 
+        with self.db.user_write() as write_cursor:
             write_cursor.execute(
                 'DELETE FROM lido_csm_node_operators WHERE node_operator_id=?',
                 (node_operator_id,),

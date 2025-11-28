@@ -4542,7 +4542,7 @@
         "bond_claimable": "Claimable bond",
         "bond_current": "Current bond",
         "bond_required": "Required bond",
-        "description": "Rotki will use the following pairs to read the stETH staking bond from the accounting contract.",
+        "description": "rotki will use the following pairs to read the stETH staking bond from the accounting contract.",
         "empty": "No node operators are tracked yet.",
         "keys_total": "Deposited validators",
         "node_operator": "Node operator ID",

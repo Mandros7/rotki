@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from rotkehlchen.assets.utils import asset_normalized_value
+from rotkehlchen.assets.utils import token_normalized_value_decimals
 from rotkehlchen.chain.ethereum.modules.lido_csm.constants import (
     ACCOUNTING_ABI,
     CSM_MODULE_ABI,
@@ -34,7 +34,7 @@ log = RotkehlchenLogsAdapter(logger)
 
 @dataclass
 class LidoCsmNodeOperatorStats:
-    operator_type: LidoCsmOperatorType | None
+    operator_type: LidoCsmOperatorType
     current_bond: FVal
     required_bond: FVal
     claimable_bond: FVal
@@ -42,10 +42,8 @@ class LidoCsmNodeOperatorStats:
     rewards_steth: FVal
 
     def serialize(self) -> dict[str, Any]:
-        operator_type_id = int(self.operator_type) if self.operator_type is not None else None
-        operator_type_label = (
-            self.operator_type.label if self.operator_type is not None else 'Unknown'
-        )
+        operator_type_id = int(self.operator_type)
+        operator_type_label = self.operator_type.label
         return {
             'operator_type': {
                 'id': operator_type_id,
@@ -70,6 +68,7 @@ class LidoCsmMetricsFetcher:
             self,
             evm_inquirer: 'EthereumInquirer',
     ) -> None:
+        # TODO: share conversion logic here mirrors balances.py; extract a shared helper.
         self.accounting_contract = EvmContract(
             address=LIDO_CSM_ACCOUNTING_CONTRACT,
             abi=ACCOUNTING_ABI,
@@ -80,9 +79,8 @@ class LidoCsmMetricsFetcher:
             abi=CSM_MODULE_ABI,
             deployed_block=LIDO_CSM_MODULE_CONTRACT_DEPLOYED_BLOCK,
         )
-        self._steth_token = A_STETH.resolve_to_evm_token()
         self.steth_contract = EvmContract(
-            address=self._steth_token.evm_address,
+            address=A_STETH.resolve_to_evm_token().evm_address,
             abi=STETH_ABI,
             deployed_block=LIDO_STETH_DEPLOYED_BLOCK,
         )
@@ -99,7 +97,7 @@ class LidoCsmMetricsFetcher:
             method_name='getPooledEthByShares',
             arguments=[shares],
         )
-        return asset_normalized_value(pooled_eth, self._steth_token)
+        return token_normalized_value_decimals(pooled_eth, 18)
 
     def _fetch_ipfs_json(self, cid: str) -> dict[str, Any]:
         """Fetch the fee distributor merkle tree document from IPFS.
@@ -118,7 +116,7 @@ class LidoCsmMetricsFetcher:
         try:
             operator_type = LidoCsmOperatorType(int(curve_id))
         except (ValueError, TypeError):
-            operator_type = None
+            operator_type = LidoCsmOperatorType.UNKNOWN
 
         current_shares_raw, required_shares_raw = self.accounting_contract.call(
             node_inquirer=self.evm_inquirer,

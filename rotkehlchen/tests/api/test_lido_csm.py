@@ -8,6 +8,7 @@ from rotkehlchen.chain.accounts import BlockchainAccountData
 from rotkehlchen.chain.ethereum.modules.lido_csm.constants import LidoCsmOperatorType
 from rotkehlchen.chain.ethereum.modules.lido_csm.metrics import LidoCsmNodeOperatorStats
 from rotkehlchen.db.lido_csm import DBLidoCsm
+from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.fval import FVal
 from rotkehlchen.tests.utils.api import (
     api_url_for,
@@ -120,7 +121,7 @@ def test_add_lido_csm_node_operator_requires_tracked_account(
     )
     assert_error_response(
         response,
-        status_code=HTTPStatus.BAD_REQUEST,
+        status_code=HTTPStatus.CONFLICT,
         contained_in_msg='not registered as an Ethereum EVM account',
     )
 
@@ -174,3 +175,50 @@ def test_refresh_metrics_endpoint_persists(
     assert entries[0].node_operator_id == 7
     assert entries[0].metrics is not None
     assert entries[0].metrics.serialize() == metrics_payload
+
+
+def test_add_lido_csm_node_operator_returns_warning_on_metrics_failure(
+        rotkehlchen_api_server,
+) -> None:
+    rotki = rotkehlchen_api_server.rest_api.rotkehlchen
+    address = make_evm_address()
+    _register_eth_account(rotki, address)
+
+    with patch(
+        'rotkehlchen.api.rest.LidoCsmMetricsFetcher.get_operator_stats',
+        side_effect=RemoteError('boom'),
+    ):
+        response = requests.put(
+            api_url_for(rotkehlchen_api_server, 'lidocsmnodeoperatorresource'),
+            json={
+                'address': address,
+                'node_operator_id': 12,
+            },
+        )
+
+    assert response.status_code == HTTPStatus.BAD_GATEWAY
+    payload = response.json()
+    assert payload['result'][0]['metrics'] is None
+    assert 'Failed to fetch metrics' in payload['message']
+
+
+def test_refresh_metrics_endpoint_warns_on_failure(rotkehlchen_api_server) -> None:
+    rotki = rotkehlchen_api_server.rest_api.rotkehlchen
+    db = DBLidoCsm(rotki.data.db)
+    address = make_evm_address()
+    _register_eth_account(rotki, address)
+    db.add_node_operator(
+        address=address,
+        node_operator_id=7,
+    )
+
+    with patch(
+        'rotkehlchen.api.rest.LidoCsmMetricsFetcher.get_operator_stats',
+        side_effect=RemoteError('boom'),
+    ):
+        response = requests.post(api_url_for(rotkehlchen_api_server, 'lidocsmmetricsresource'))
+
+    assert response.status_code == HTTPStatus.BAD_GATEWAY
+    payload = response.json()
+    assert payload['result'][0]['metrics'] is None
+    assert '7' in payload['message']

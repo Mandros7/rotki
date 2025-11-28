@@ -7,7 +7,7 @@ import pytest
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.chain.accounts import BlockchainAccountData
 from rotkehlchen.chain.ethereum.modules.lido_csm.balances import LidoCsmBalances
-from rotkehlchen.chain.ethereum.modules.lido_csm.constants import CPT_LIDO_CSM
+from rotkehlchen.chain.ethereum.modules.lido_csm.constants import CPT_LIDO_CSM, LidoCsmOperatorType
 from rotkehlchen.chain.ethereum.modules.lido_csm.metrics import (
     LidoCsmMetricsFetcher,
     LidoCsmNodeOperatorStats,
@@ -55,7 +55,7 @@ def test_lido_csm_balances_accumulates():
         LidoCsmMetricsFetcher,
         'get_operator_stats',
         return_value=LidoCsmNodeOperatorStats(
-            operator_type=None,
+            operator_type=LidoCsmOperatorType.UNKNOWN,
             current_bond=FVal(0),
             required_bond=FVal(0),
             claimable_bond=FVal(0),
@@ -96,7 +96,7 @@ def test_lido_csm_balances_skips_on_error():
         LidoCsmMetricsFetcher,
         'get_operator_stats',
         return_value=LidoCsmNodeOperatorStats(
-            operator_type=None,
+            operator_type=LidoCsmOperatorType.UNKNOWN,
             current_bond=FVal(0),
             required_bond=FVal(0),
             claimable_bond=FVal(0),

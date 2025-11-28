@@ -817,7 +817,8 @@ CREATE TABLE IF NOT EXISTS solana_tx_mappings (
 );
 """  # noqa: E501
 
-# Lido CSM tracking tables
+# Lido CSM tracking tables. All columns are consumed by DBLidoCsm for enforcing the
+# FK to tracked Ethereum accounts and persisting cached metrics snapshots.
 DB_CREATE_LIDO_CSM_NODE_OPERATORS = """
 CREATE TABLE IF NOT EXISTS lido_csm_node_operators (
     node_operator_id INTEGER NOT NULL PRIMARY KEY,

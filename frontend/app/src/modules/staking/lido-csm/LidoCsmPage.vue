@@ -80,7 +80,9 @@ function toBigNumberValue(value?: BigNumber | string | number | null): BigNumber
 async function fetchNodeOperators(): Promise<void> {
   set(loading, true);
   try {
-    set(nodeOperators, await api.listNodeOperators());
+    const { entries, message } = await api.listNodeOperators();
+    set(nodeOperators, entries);
+    notifyWarning(message);
   }
   catch (error: unknown) {
     setMessage({
@@ -95,7 +97,9 @@ async function fetchNodeOperators(): Promise<void> {
 async function refreshAllNodeOperators(): Promise<void> {
   set(loading, true);
   try {
-    set(nodeOperators, await api.refreshMetrics());
+    const { entries, message } = await api.refreshMetrics();
+    set(nodeOperators, entries);
+    notifyWarning(message);
   }
   catch (error: unknown) {
     setMessage({
@@ -109,7 +113,9 @@ async function refreshAllNodeOperators(): Promise<void> {
 
 async function addNodeOperator(payload: LidoCsmNodeOperatorPayload): Promise<void> {
   try {
-    set(nodeOperators, await api.addNodeOperator(payload));
+    const { entries, message } = await api.addNodeOperator(payload);
+    set(nodeOperators, entries);
+    notifyWarning(message);
   }
   catch (error: unknown) {
     setMessage({
@@ -121,7 +127,9 @@ async function addNodeOperator(payload: LidoCsmNodeOperatorPayload): Promise<voi
 
 async function deleteNodeOperator(payload: LidoCsmNodeOperatorPayload): Promise<void> {
   try {
-    set(nodeOperators, await api.deleteNodeOperator(payload));
+    const { entries, message } = await api.deleteNodeOperator(payload);
+    set(nodeOperators, entries);
+    notifyWarning(message);
   }
   catch (error: unknown) {
     setMessage({
@@ -136,6 +144,15 @@ function formatCount(value?: number | null): string {
     return get(notAvailableLabel);
 
   return value.toString();
+}
+
+function notifyWarning(message?: string): void {
+  if (!message)
+    return;
+
+  setMessage({
+    description: message,
+  });
 }
 
 interface LidoCsmTableRow {

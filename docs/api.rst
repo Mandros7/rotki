@@ -11238,7 +11238,7 @@ Get location labels
       {
           "result": [
               {
-                  "address": "0x0000000000000000000000000000000000000000",
+                  "address": "0xbB8311c7bAD518f0D8f907Cad26c5CcC85a06dC4",
                   "node_operator_id": 7,
                   "metrics": {
                       "operatorType": {"id": 1, "label": "Permissionless"},
@@ -11271,15 +11271,16 @@ Get location labels
       Content-Type: application/json;charset=UTF-8
 
       {
-          "address": "0x0000000000000000000000000000000000000000",
+          "address": "0xbB8311c7bAD518f0D8f907Cad26c5CcC85a06dC4",
           "node_operator_id": 7
       }
 
    :reqjson string address: Checksummed Ethereum address that owns the node operator. It must be registered as an Ethereum EVM account.
    :reqjson int node_operator_id: Non-negative node operator identifier.
    :statuscode 200: Node operator stored and metrics computed when possible.
-   :statuscode 400: Malformed payload or the address is not registered as an Ethereum EVM account.
-   :statuscode 409: Node operator already tracked.
+   :statuscode 400: Malformed payload.
+   :statuscode 409: Address is not registered as an Ethereum EVM account or node operator already tracked.
+   :statuscode 502: Operator stored but metrics could not be fetched from the blockchain.
 
 .. http:delete:: /api/(version)/lido-csm/node-operators
 
@@ -11295,7 +11296,7 @@ Get location labels
       Content-Type: application/json;charset=UTF-8
 
       {
-          "address": "0x0000000000000000000000000000000000000000",
+          "address": "0xbB8311c7bAD518f0D8f907Cad26c5CcC85a06dC4",
           "node_operator_id": 7
       }
 
@@ -11327,7 +11328,7 @@ Get location labels
       {
           "result": [
               {
-                  "address": "0x0000000000000000000000000000000000000000",
+                  "address": "0xbB8311c7bAD518f0D8f907Cad26c5CcC85a06dC4",
                   "node_operator_id": 7,
                   "metrics": {
                       "operatorType": {"id": 1, "label": "Permissionless"},
@@ -11343,6 +11344,7 @@ Get location labels
    :resjson list result: Updated node operator entries.
    :statuscode 200: Metrics refreshed successfully.
    :statuscode 500: Refresh failed; see message for details.
+   :statuscode 502: Refresh partially succeeded but at least one operator's metrics failed to update.
 
 
 Staking events
