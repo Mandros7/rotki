@@ -172,7 +172,7 @@ class LidoCsmMetricsFetcher:
                     operator_id_raw, cumulative_raw = val[0], val[1]
                     if int(operator_id_raw) != int(node_operator_id):
                         continue
-                        
+
                     cumulative_shares = int(cumulative_raw)
                     break
                 except (TypeError, ValueError) as e:
