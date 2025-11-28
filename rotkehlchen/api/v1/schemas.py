@@ -13,6 +13,7 @@ from eth_utils import is_checksum_address, is_hexstr, to_checksum_address
 from marshmallow import INCLUDE, Schema, fields, post_load, validate, validates_schema
 from marshmallow.exceptions import ValidationError
 from werkzeug.datastructures import FileStorage
+from http import HTTPStatus
 
 from rotkehlchen.accounting.structures.balance import BalanceType
 from rotkehlchen.accounting.types import SchemaEventType
@@ -2628,6 +2629,29 @@ class QueriedAddressesSchema(Schema):
 class LidoCsmNodeOperatorSchema(Schema):
     address = EvmAddressField(required=True)
     node_operator_id = fields.Integer(required=True, validate=validate.Range(min=0))
+
+    def __init__(self, database: 'DBHandler') -> None:
+        super().__init__()
+        self.database = database
+
+    @validates_schema
+    def validate_existing_address(self, data: dict[str, Any], **kwargs: Any) -> None:  # pylint: disable=unused-argument
+        """Ensure the provided address is already tracked as an Ethereum account."""
+        address = data['address']
+        with self.database.conn.read_ctx() as cursor:
+            exists = cursor.execute(
+                """
+                SELECT 1 FROM blockchain_accounts
+                WHERE blockchain=? AND account=?
+                """,
+                (SupportedBlockchain.ETHEREUM.value, address),
+            ).fetchone()
+        if exists is None:
+            raise ValidationError(
+                f'Address {address} is not registered as an Ethereum EVM account',
+                field_name='address',
+                status_code=HTTPStatus.CONFLICT,
+            )
 
 
 class DataImportSchema(AsyncQueryArgumentSchema):

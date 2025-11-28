@@ -1944,7 +1944,9 @@ class QueriedAddressesResource(BaseMethodView):
 class LidoCsmNodeOperatorResource(BaseMethodView):
 
     def make_modify_schema(self) -> LidoCsmNodeOperatorSchema:
-        return LidoCsmNodeOperatorSchema()
+        return LidoCsmNodeOperatorSchema(
+            database=self.rest_api.rotkehlchen.data.db,
+        )
 
     @require_loggedin_user()
     def get(self) -> Response:

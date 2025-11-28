@@ -19,6 +19,7 @@ from rotkehlchen.chain.ethereum.modules.lido_csm.constants import (
     LidoCsmOperatorType,
 )
 from rotkehlchen.chain.evm.contracts import EvmContract
+from rotkehlchen.constants import ZERO
 from rotkehlchen.constants.assets import A_STETH
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.fval import FVal
@@ -64,6 +65,7 @@ class LidoCsmNodeOperatorStats:
 
 
 class LidoCsmMetricsFetcher:
+    """Fetches and normalizes Lido CSM metrics from on-chain contracts and IPFS."""
     def __init__(
             self,
             evm_inquirer: 'EthereumInquirer',
@@ -92,6 +94,12 @@ class LidoCsmMetricsFetcher:
         self.evm_inquirer = evm_inquirer
 
     def _convert_shares_to_steth(self, shares: int) -> FVal:
+        """Convert stETH shares to normalized stETH amounts.
+
+        May raise:
+            RemoteError: if the stETH contract call fails.
+            ValueError: if the contract returns non-numeric data.
+        """
         pooled_eth = self.steth_contract.call(
             node_inquirer=self.evm_inquirer,
             method_name='getPooledEthByShares',
@@ -104,10 +112,17 @@ class LidoCsmMetricsFetcher:
 
         May raise:
             RemoteError: if the document cannot be retrieved.
+            ValueError: if the response is not valid JSON.
         """
         return query_file(f'{LIDO_CSM_IPFS_GATEWAY}{cid}', is_json=True)
 
     def get_operator_stats(self, node_operator_id: int) -> LidoCsmNodeOperatorStats:
+        """Gather and normalize bond/reward stats for a node operator.
+
+        May raise:
+            RemoteError: if any contract call fails and is not handled by IPFS fallback.
+            ValueError: if numeric conversions from contract responses fail.
+        """
         curve_id = self.accounting_contract.call(
             node_inquirer=self.evm_inquirer,
             method_name='getBondCurveId',
@@ -157,6 +172,7 @@ class LidoCsmMetricsFetcher:
                     operator_id_raw, cumulative_raw = val[0], val[1]
                     if int(operator_id_raw) != int(node_operator_id):
                         continue
+                        
                     cumulative_shares = int(cumulative_raw)
                     break
                 except (TypeError, ValueError) as e:
@@ -164,6 +180,7 @@ class LidoCsmMetricsFetcher:
                         f'Skipping Lido CSM rewards entry {val} due to parsing error: {e}',
                     )
                     continue
+
             distributed = self.fee_distributor_contract.call(
                 node_inquirer=self.evm_inquirer,
                 method_name='distributedShares',
@@ -173,7 +190,7 @@ class LidoCsmMetricsFetcher:
             rewards_steth = self._convert_shares_to_steth(pending_shares)
         except RemoteError as e:
             log.error(f'Failed to compute Lido CSM rewards for {node_operator_id}: {e}')
-            rewards_steth = FVal(0)
+            rewards_steth = ZERO
 
         return LidoCsmNodeOperatorStats(
             operator_type=operator_type,

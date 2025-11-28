@@ -35,6 +35,11 @@ class DBLidoCsm:
 
     @staticmethod
     def _deserialize_metrics_row(row: tuple[Any, ...]) -> LidoCsmNodeOperatorStats | None:
+        """Convert a DB metrics row into a LidoCsmNodeOperatorStats object.
+
+        May raise:
+            ValueError: if numeric conversions fail (propagated to callers).
+        """
         (
             operator_type_id,
             bond_current,
@@ -65,6 +70,11 @@ class DBLidoCsm:
 
     @staticmethod
     def _deserialize_entry(row: tuple[Any, ...]) -> LidoCsmNodeOperator:
+        """Convert a joined operator/metrics row into a dataclass instance.
+
+        May raise:
+            ValueError: if numeric conversions fail (propagated to callers).
+        """
         address, node_operator_id, *metrics_parts = row
         metrics = DBLidoCsm._deserialize_metrics_row(tuple(metrics_parts))
         return LidoCsmNodeOperator(
@@ -74,6 +84,7 @@ class DBLidoCsm:
         )
 
     def get_node_operators(self) -> tuple[LidoCsmNodeOperator, ...]:
+        """Return all tracked node operators with their cached metrics, if any."""
         with self.db.conn.read_ctx() as cursor:
             rows = cursor.execute(
                 """
@@ -126,6 +137,7 @@ class DBLidoCsm:
 
         May raise:
             InputError: if the node operator id is unknown.
+            ValueError: if numeric conversions fail.
         """
         with self.db.conn.read_ctx() as cursor:
             existing = cursor.execute(
@@ -171,6 +183,7 @@ class DBLidoCsm:
             )
 
     def delete_metrics(self, node_operator_id: int) -> None:
+        """Remove cached metrics for a tracked node operator."""
         with self.db.user_write() as write_cursor:
             write_cursor.execute(
                 'DELETE FROM lido_csm_node_operator_metrics WHERE node_operator_id=?',

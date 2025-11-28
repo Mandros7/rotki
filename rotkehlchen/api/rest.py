@@ -2340,36 +2340,11 @@ class RestAPI:
             for entry in entries
         ]
 
-    def _ensure_tracked_eth_account(
-            self,
-            address: ChecksumEvmAddress,
-    ) -> str | None:
-        """Confirm the address is tracked on Ethereum mainnet.
-
-        The CSM contracts only live on Ethereum, so we need to look specifically
-        at ``SupportedBlockchain.ETHEREUM`` rather than any generic EVM chain.
-        Returns an error string if the address is missing.
-        """
-        with self.rotkehlchen.data.db.conn.read_ctx() as cursor:
-            exists = cursor.execute(
-                """
-                SELECT 1 FROM blockchain_accounts
-                WHERE blockchain=? AND account=?
-                """,
-                (SupportedBlockchain.ETHEREUM.value, address),
-            ).fetchone()
-        if exists is None:
-            return f'Address {address} is not registered as an Ethereum EVM account'
-        return None
-
     def add_lido_csm_node_operator(
             self,
             address: ChecksumEvmAddress,
             node_operator_id: int,
     ) -> Response:
-        if (error := self._ensure_tracked_eth_account(address)) is not None:
-            return api_response(wrap_in_fail_result(error), status_code=HTTPStatus.CONFLICT)
-
         try:
             DBLidoCsm(self.rotkehlchen.data.db).add_node_operator(
                 address=address,
@@ -2407,9 +2382,6 @@ class RestAPI:
             address: ChecksumEvmAddress,
             node_operator_id: int,
     ) -> Response:
-        if (error := self._ensure_tracked_eth_account(address)) is not None:
-            return api_response(wrap_in_fail_result(error), status_code=HTTPStatus.CONFLICT)
-
         try:
             DBLidoCsm(self.rotkehlchen.data.db).remove_node_operator(
                 address=address,
